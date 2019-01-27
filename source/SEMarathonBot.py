@@ -8,8 +8,8 @@ from utils import debug_print
 
 TOKEN = "747763703:AAFf09Rwhmo4iIb3II0cKV43z-xmCaOofvY"
 
-updater = tgb.Updater(token=TOKEN)
-dispatcher = updater.dispatcher
+UPDATER = tgb.Updater(token=TOKEN)
+BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
 
 
 def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_handler_kwargs):
@@ -28,7 +28,7 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
             return callback(*effective_args, **kwargs)
 
         handler = tgb.CommandHandler(callback.__name__, decorated, **cmd_handler_kwargs)
-        dispatcher.add_handler(handler)
+        DISPATCHER.add_handler(handler)
         return handler
 
     return decorator
@@ -129,9 +129,9 @@ if __name__ == '__main__':
                         level=logging.INFO)
 
     try:
-        updater.start_polling()
+        UPDATER.start_polling()
     finally:
         for chat in BotSession.sessions:
-            updater.bot.send_message(chat_id=chat,
+            UPDATER.bot.send_message(chat_id=chat,
                                      text="*SHUTDOWN* Shutting down due to error.",
                                      parse_mode='Markdown')
