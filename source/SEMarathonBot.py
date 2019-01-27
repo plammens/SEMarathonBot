@@ -9,7 +9,8 @@ import marathon as sem
 from utils import debug_print
 
 
-TOKEN: str = "747763703:AAFf09Rwhmo4iIb3II0cKV43z-xmCaOofvY"
+with open('token.txt') as file:
+    TOKEN: str = file.read().strip()
 
 UPDATER = tge.Updater(token=TOKEN)
 BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
