@@ -88,6 +88,10 @@ class Participant:
             self._users[site] = Participant.User(site, self.name)
         return self._users[site]
 
+    def fetch_users(self, *sites: str):
+        for site in sites:
+            self._users[site] = Participant.User(site, self.name)
+
 
 class Update:
     participant: Participant
@@ -123,9 +127,14 @@ class Marathon:
 
     def add_sites(self, *sites: str):
         self.sites.extend(sites)
+        for participant in self.participants:
+            participant.fetch_users(*sites)
 
-    def add_participants(self, *names: str):
-        self.participants.extend(Participant(name) for name in names)
+    def add_participants(self, *usernames: str):
+        for username in usernames:
+            p = Participant(username)
+            p.fetch_users(*self.sites)
+            self.participants.append(p)
 
     def poll(self):
         for participant in self.participants:

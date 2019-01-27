@@ -78,7 +78,12 @@ def add_participants(session, update, args):
                                            "Create one first by typing `/new_marathon`.")
         return
 
-    session.marathon.add_participants(*args)
+    try:
+        session.marathon.add_participants(*args)
+    except sem.UserNotFoundError as err:
+        update.message.reply_markdown(text="*ERROR*: {}".format(err))
+    except sem.MultipleUsersFoundError as err:
+        update.message.reply_markdown(text="*ERROR*: {}".format(err))
 
     def msg_lines(p: sem.Participant):
         yield "Added *{}* to marathon:".format(p.name)
@@ -120,4 +125,11 @@ if __name__ == '__main__':
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.INFO)
-    BotSession.updater.start_polling()
+
+    try:
+        BotSession.updater.start_polling()
+    finally:
+        for chat in BotSession.sessions:
+            BotSession.updater.bot.send_message(chat_id=chat,
+                                                text="*SHUTDOWN* Shutting down due to error.",
+                                                parse_mode='Markdown')
