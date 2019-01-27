@@ -9,8 +9,8 @@ import marathon as sem
 from utils import debug_print
 
 
-with open('token.txt') as file:
-    TOKEN: str = file.read().strip()
+with open('token.txt') as token_file:
+    TOKEN: str = token_file.read().strip()
 
 UPDATER = tge.Updater(token=TOKEN)
 BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
@@ -21,6 +21,7 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
 
     def decorator(callback: callable) -> tge.CommandHandler:
         """Actual decorator"""
+
         def decorated(bot, update, *args, **kwargs):
             debug_print("/{} served".format(callback.__name__))
 
@@ -42,9 +43,6 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
     return decorator
 
 
-# TODO: extract check marathon method
-
-
 class BotSession:
     sessions: Dict[int, 'BotSession'] = {}
     id: int
@@ -57,11 +55,17 @@ class BotSession:
 
     @staticmethod
     @cmd_handler(pass_session=False)
+    def info(update: tg.Update):
+        with open('info.md') as file:
+            update.message.reply_markdown(file.read().strip())
+
+
+    @staticmethod
+    @cmd_handler(pass_session=False)
     def start(update: tg.Update):
         update.message.reply_markdown(text="Hi, I'm the Stack Exchange Marathon Bot! "
                                            "Type `/new_marathon` to create a new marathon.")
         BotSession(update.message.chat_id)
-
 
     @cmd_handler()
     def new_marathon(self, update: tg.Update):
@@ -69,7 +73,6 @@ class BotSession:
         update.message.reply_markdown(text="I've created a new marathon with the default settings. "
                                            "Configure them at your will. Type `/start_marathon` "
                                            "when you're ready.")
-
 
     @cmd_handler()
     def settings(self, update: tg.Update):
@@ -89,7 +92,6 @@ class BotSession:
             yield "\n*Duration*: {}h".format(self.marathon.duration)
 
         update.message.reply_markdown(text='\n'.join(msg_lines()))
-
 
     @cmd_handler(pass_args=True)
     def add_participants(self, update: tg.Update, args: List[str]):
@@ -112,16 +114,13 @@ class BotSession:
         for name in args:
             update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[name])))
 
-
     @cmd_handler(pass_args=True)
     def set_duration(self, update: tg.Update, args: List[str]):
         pass
 
-
     @cmd_handler()
     def start_marathon(self, update: tg.Update, ):
         update.message.reply_text(text="Creating new marathon...")
-
 
     def marathon_created(self) -> bool:
         if not self.marathon:
