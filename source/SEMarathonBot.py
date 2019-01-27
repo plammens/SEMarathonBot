@@ -76,7 +76,7 @@ class BotSession:
                 yield "\t - {}".format(sem.SITE_NAMES[site])
 
             yield "\n*Participants*:"
-            for participant in self.marathon.participants:
+            for participant in self.marathon.participants.values():
                 yield "\t - {}".format(participant.name)
 
             yield "\n*Duration*: {}h".format(self.marathon.duration)

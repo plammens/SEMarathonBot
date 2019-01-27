@@ -123,7 +123,7 @@ class Marathon:
 
     def __init__(self, *sites: str):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
-        self.participants = []
+        self.participants = {}
         self.duration = 12
 
     def add_sites(self, *sites: str):
