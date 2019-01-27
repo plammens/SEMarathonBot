@@ -55,7 +55,8 @@ class Participant:
             self.site = site
             self.name = username
 
-            results = get_api(site).fetch('users', inname=username)['items']
+            results = get_api(site).fetch('users', inname=username, sort='name', order='desc',
+                                          min=username, max=username)['items']
             if not results:
                 raise UserNotFoundError(self)
             elif len(results) > 1:
@@ -117,7 +118,7 @@ class Update:
 
 class Marathon:
     sites: List[str]
-    participants: List[Participant]
+    participants: Dict[str, Participant]
     duration: int
 
     def __init__(self, *sites: str):
@@ -127,17 +128,17 @@ class Marathon:
 
     def add_sites(self, *sites: str):
         self.sites.extend(sites)
-        for participant in self.participants:
+        for participant in self.participants.values():
             participant.fetch_users(*sites)
 
     def add_participants(self, *usernames: str):
         for username in usernames:
             p = Participant(username)
             p.fetch_users(*self.sites)
-            self.participants.append(p)
+            self.participants[username] = p
 
     def poll(self):
-        for participant in self.participants:
+        for participant in self.participants.values():
             update = Update(participant)
             for site in self.sites:
                 increment = participant.user(site).update()
