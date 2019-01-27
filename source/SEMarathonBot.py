@@ -86,14 +86,11 @@ class BotSession:
 
 
     @cmd_handler(pass_args=True)
-    def add_participants(self, update, args):
-        if not self.marathon:
-            update.message.reply_markdown(text="Marathon not yet created! "
-                                               "Create one first by typing `/new_marathon`.")
-            return
+    def add_participants(self, update, usernames):
+        if not self.marathon_created(): return
 
         try:
-            self.marathon.add_participants(*args)
+            self.marathon.add_participants(*usernames)
         except sem.UserNotFoundError as err:
             update.message.reply_markdown(text="*ERROR*: {}".format(err))
         except sem.MultipleUsersFoundError as err:
@@ -119,6 +116,14 @@ class BotSession:
     def start_marathon(self, update):
         update.message.reply_text(text="Creating new marathon...")
 
+
+    def marathon_created(self):
+        if not self.marathon:
+            BOT.send_message(chat_id=self.id,
+                             text="Marathon not yet created! "
+                                  "Create one first by typing /new_marathon .")
+            return False
+        return True
 
 
 print("Done.")
