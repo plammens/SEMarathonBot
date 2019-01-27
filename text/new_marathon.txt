@@ -1,0 +1,1 @@
+I've created a new marathon with the default settings. Configure them at your will. Type /start\_marathon when you're ready.

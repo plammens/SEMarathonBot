@@ -56,26 +56,29 @@ class BotSession:
     @staticmethod
     @cmd_handler(pass_session=False)
     def info(update: tg.Update):
-        with open('info.md') as file:
+        """Show info message"""
+        with open('text/info.md') as file:
             update.message.reply_markdown(file.read().strip())
 
 
     @staticmethod
     @cmd_handler(pass_session=False)
     def start(update: tg.Update):
-        update.message.reply_markdown(text="Hi, I'm the Stack Exchange Marathon Bot! "
-                                           "Type `/new_marathon` to create a new marathon.")
+        """Start session"""
         BotSession(update.message.chat_id)
+        with open('text/start.txt') as file:
+            update.message.reply_text(text=file.read().strip())
 
     @cmd_handler()
     def new_marathon(self, update: tg.Update):
+        """Create new marathon"""
         self.marathon = sem.Marathon()
-        update.message.reply_markdown(text="I've created a new marathon with the default settings. "
-                                           "Configure them at your will. Type `/start_marathon` "
-                                           "when you're ready.")
+        with open('text/new_marathon.txt') as file:
+            update.message.reply_markdown(text=file.read().strip())
 
     @cmd_handler()
     def settings(self, update: tg.Update):
+        """Show settings"""
         if not self.marathon_created(): return
 
         def msg_lines():
@@ -95,6 +98,7 @@ class BotSession:
 
     @cmd_handler(pass_args=True)
     def add_participants(self, update: tg.Update, args: List[str]):
+        """Add participants to marathon"""
         if not self.marathon_created(): return
 
         try:
@@ -124,9 +128,8 @@ class BotSession:
 
     def marathon_created(self) -> bool:
         if not self.marathon:
-            BOT.send_message(chat_id=self.id,
-                             text="Marathon not yet created! "
-                                  "Create one first by typing /new_marathon .")
+            with open('marathon_not_created.txt') as file:
+                BOT.send_message(chat_id=self.id, text=file.read().strip())
             return False
         return True
 

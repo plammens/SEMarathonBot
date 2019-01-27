@@ -1,0 +1,1 @@
+Hi, I'm the Stack Exchange Marathon Bot! Now listening for commands. Type /new_marathon to create a new marathon.

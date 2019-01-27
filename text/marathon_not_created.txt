@@ -1,0 +1,1 @@
+Marathon not yet created! Type /new\_marathon to create a new marathon with default settings (which you'll be able to edit before starting the marathon).
