@@ -28,21 +28,47 @@ def get_api(site: str):
     return APIS[site]
 
 
+class UserError(LookupError):
+    def __init__(self, user: 'Participant.User'):
+        self.user = user
+
+    @property
+    def site(self):
+        return self.user.site
+
+
+class UserNotFoundError(UserError):
+    def __str__(self):
+        return "User {} not found at {}".format(self.user.name, self.user.site)
+
+
+class MultipleUsersFoundError(UserError):
+    def __str__(self):
+        return "Multiple candidates found for user {} at {}".format(self.user.name, self.user.site)
+
+
 class Participant:
     name: str
 
     class User:
         def __init__(self, site: str, username: str):
-            self.api = get_api(site)
+            self.site = site
             self.name = username
-            user_data = self.api.fetch('users', inname=username)['items'][0]
+
+            results = get_api(site).fetch('users', inname=username)['items']
+            if not results:
+                raise UserNotFoundError(self)
+            elif len(results) > 1:
+                raise MultipleUsersFoundError(self)
+            user_data = results[0]
+
             self.id = user_data['user_id']
             self.last_checked = time()
             self.score = 0
 
         def update(self) -> bool:
-            results = self.api.fetch('users/{}/reputation'.format(self.id),
-                                     fromdate=self.last_checked)
+            results = get_api(self.site).fetch('users/{}/reputation'.format(self.id),
+                                               fromdate=self.last_checked)
             updates = results['items']
             if updates: self.last_checked = updates[0]['on_date'] + 1
             increment = sum(u['reputation_change'] for u in updates)
