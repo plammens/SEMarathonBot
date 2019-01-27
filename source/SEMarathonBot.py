@@ -18,6 +18,7 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
             debug_print("/{} served".format(callback.__name__))
 
             session = BotSession.sessions.get(update.message.chat_id, None)
+            if pass_session and session is None: return
             effective_args = {
                 (True, True): (session, bot, update, *args),
                 (True, False): (session, update, *args),
