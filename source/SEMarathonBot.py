@@ -1,3 +1,5 @@
+from typing import Dict
+
 print("Initializing server... ", end='')
 
 import telegram.ext as tgb
@@ -35,15 +37,17 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
     return decorator
 
 
-# TODO: refactor CHs into class
 # TODO: extract check marathon method
 
 
 class BotSession:
-    sessions = {}
+    sessions: Dict[int, 'BotSession'] = {}
+    id: int
+    marathon: sem.Marathon
 
     def __init__(self, chat_id: int):
         BotSession.sessions[chat_id] = self
+        self.id = chat_id
         self.marathon = None
 
     @staticmethod
@@ -64,10 +68,7 @@ class BotSession:
 
     @cmd_handler()
     def settings(self: 'BotSession', update):
-        if not self.marathon:
-            update.message.reply_markdown(text="Marathon not yet created! "
-                                               "Create one first by typing `/new_marathon`.")
-            return
+        if not self.marathon_created(): return
 
         def msg_lines():
             yield "Current settings for marathon:"
@@ -103,8 +104,8 @@ class BotSession:
             yield ""
             yield "Please verify the IDs are correct."
 
-        for participant in self.marathon.participants:
-            update.message.reply_markdown(text='\n'.join(msg_lines(participant)))
+        for name in usernames:
+            update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[name])))
 
 
     @cmd_handler(pass_args=True)
