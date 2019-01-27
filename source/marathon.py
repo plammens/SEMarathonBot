@@ -44,7 +44,17 @@ class UserNotFoundError(UserError):
 
 class MultipleUsersFoundError(UserError):
     def __str__(self):
-        return "Multiple candidates found for user {} at {}".format(self.user.name, self.user.site)
+        return "Multiple candidates found for user '{}' at {}".format(self.user.name, self.user.site)
+
+
+class SiteError(LookupError):
+    def __init__(self, site):
+        self.site = site
+
+
+class SiteNotFoundError(SiteError):
+    def __str__(self):
+        return "Site '{}' not found on SE network".format(self.site)
 
 
 class Participant:
@@ -89,9 +99,8 @@ class Participant:
             self._users[site] = Participant.User(site, self.name)
         return self._users[site]
 
-    def fetch_users(self, *sites: str):
-        for site in sites:
-            self._users[site] = Participant.User(site, self.name)
+    def fetch_user(self, site: str):
+        self._users[site] = Participant.User(site, self.name)
 
 
 class Update:
@@ -126,16 +135,16 @@ class Marathon:
         self.participants = {}
         self.duration = 12
 
-    def add_sites(self, *sites: str):
-        self.sites.extend(sites)
+    def add_site(self, site: str):
+        if site not in SITE_NAMES: raise SiteNotFoundError(site)
+        self.sites.append(site)
         for participant in self.participants.values():
-            participant.fetch_users(*sites)
+            participant.fetch_user(site)
 
-    def add_participants(self, *usernames: str):
-        for username in usernames:
-            p = Participant(username)
-            p.fetch_users(*self.sites)
-            self.participants[username] = p
+    def add_participant(self, username: str):
+        p = Participant(username)
+        p.fetch_user(*self.sites)
+        self.participants[username] = p
 
     def poll(self):
         for participant in self.participants.values():

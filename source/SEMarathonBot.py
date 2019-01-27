@@ -101,13 +101,6 @@ class BotSession:
         """Add participants to marathon"""
         if not self.marathon_created(): return
 
-        try:
-            self.marathon.add_participants(*args)
-        except sem.UserNotFoundError as err:
-            update.message.reply_markdown(text="*ERROR*: {}".format(err))
-        except sem.MultipleUsersFoundError as err:
-            update.message.reply_markdown(text="*ERROR*: {}".format(err))
-
         def msg_lines(p: sem.Participant):
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
@@ -115,8 +108,15 @@ class BotSession:
             yield ""
             yield "Please verify the IDs are correct."
 
-        for name in args:
-            update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[name])))
+        for username in args:
+            try:
+                self.marathon.add_participant(username)
+                update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[username])))
+            except sem.UserNotFoundError as err:
+                self.send_error_message(err)
+            except sem.MultipleUsersFoundError as err:
+                self.send_error_message(err)
+
 
     @cmd_handler(pass_args=True)
     def set_duration(self, update: tg.Update, args: List[str]):
@@ -132,6 +132,9 @@ class BotSession:
                 BOT.send_message(chat_id=self.id, text=file.read().strip())
             return False
         return True
+
+    def send_error_message(self, error: Exception):
+        BOT.send_message(chat_id=self.id, text="*ERROR*: {}".format(error))
 
 
 print("Done.")
