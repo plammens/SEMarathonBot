@@ -1,19 +1,25 @@
+from typing import List, Dict
+
 print("Initializing server... ", end='')
 
-import telegram.ext as tgb
+import telegram as tg
+import telegram.ext as tge
 
 import marathon as sem
 from utils import debug_print
 
 
-TOKEN = "747763703:AAFf09Rwhmo4iIb3II0cKV43z-xmCaOofvY"
+TOKEN: str = "747763703:AAFf09Rwhmo4iIb3II0cKV43z-xmCaOofvY"
 
-UPDATER = tgb.Updater(token=TOKEN)
+UPDATER = tge.Updater(token=TOKEN)
 BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
 
 
-def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_handler_kwargs):
-    def decorator(callback: callable):
+def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_handler_kwargs) -> callable:
+    """Returns specialized decorator for CommandHandler callback functions"""
+
+    def decorator(callback: callable) -> tge.CommandHandler:
+        """Actual decorator"""
         def decorated(bot, update, *args, **kwargs):
             debug_print("/{} served".format(callback.__name__))
 
@@ -28,34 +34,36 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
 
             return callback(*effective_args, **kwargs)
 
-        handler = tgb.CommandHandler(callback.__name__, decorated, **cmd_handler_kwargs)
+        handler = tge.CommandHandler(callback.__name__, decorated, **cmd_handler_kwargs)
         DISPATCHER.add_handler(handler)
         return handler
 
     return decorator
 
 
-# TODO: refactor CHs into class
 # TODO: extract check marathon method
 
 
 class BotSession:
-    sessions = {}
+    sessions: Dict[int, 'BotSession'] = {}
+    id: int
+    marathon: sem.Marathon
 
     def __init__(self, chat_id: int):
         BotSession.sessions[chat_id] = self
+        self.id = chat_id
         self.marathon = None
 
     @staticmethod
     @cmd_handler(pass_session=False)
-    def start(update):
+    def start(update: tg.Update):
         update.message.reply_markdown(text="Hi, I'm the Stack Exchange Marathon Bot! "
                                            "Type `/new_marathon` to create a new marathon.")
         BotSession(update.message.chat_id)
 
 
     @cmd_handler()
-    def new_marathon(self, update):
+    def new_marathon(self, update: tg.Update):
         self.marathon = sem.Marathon()
         update.message.reply_markdown(text="I've created a new marathon with the default settings. "
                                            "Configure them at your will. Type `/start_marathon` "
@@ -63,11 +71,8 @@ class BotSession:
 
 
     @cmd_handler()
-    def settings(self: 'BotSession', update):
-        if not self.marathon:
-            update.message.reply_markdown(text="Marathon not yet created! "
-                                               "Create one first by typing `/new_marathon`.")
-            return
+    def settings(self, update: tg.Update):
+        if not self.marathon_created(): return
 
         def msg_lines():
             yield "Current settings for marathon:"
@@ -86,11 +91,11 @@ class BotSession:
 
 
     @cmd_handler(pass_args=True)
-    def add_participants(self, update, usernames):
+    def add_participants(self, update: tg.Update, args: List[str]):
         if not self.marathon_created(): return
 
         try:
-            self.marathon.add_participants(*usernames)
+            self.marathon.add_participants(*args)
         except sem.UserNotFoundError as err:
             update.message.reply_markdown(text="*ERROR*: {}".format(err))
         except sem.MultipleUsersFoundError as err:
@@ -103,21 +108,21 @@ class BotSession:
             yield ""
             yield "Please verify the IDs are correct."
 
-        for participant in self.marathon.participants:
-            update.message.reply_markdown(text='\n'.join(msg_lines(participant)))
+        for name in args:
+            update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[name])))
 
 
     @cmd_handler(pass_args=True)
-    def set_duration(self, update, args):
+    def set_duration(self, update: tg.Update, args: List[str]):
         pass
 
 
     @cmd_handler()
-    def start_marathon(self, update):
+    def start_marathon(self, update: tg.Update, ):
         update.message.reply_text(text="Creating new marathon...")
 
 
-    def marathon_created(self):
+    def marathon_created(self) -> bool:
         if not self.marathon:
             BOT.send_message(chat_id=self.id,
                              text="Marathon not yet created! "
@@ -134,10 +139,4 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.INFO)
 
-    try:
-        UPDATER.start_polling()
-    finally:
-        for chat in BotSession.sessions:
-            UPDATER.bot.send_message(chat_id=chat,
-                                     text="*SHUTDOWN* Shutting down due to error.",
-                                     parse_mode='Markdown')
+    UPDATER.start_polling()
