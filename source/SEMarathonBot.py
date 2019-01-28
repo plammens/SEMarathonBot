@@ -1,5 +1,3 @@
-from typing import List, Dict
-
 print("Initializing server... ", end='')
 
 import atexit
@@ -22,6 +20,7 @@ UPDATER = tge.Updater(token=TOKEN)
 BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
 
 """Helper classes"""
+
 
 class BotArgumentError(ValueError):
     pass
@@ -86,6 +85,7 @@ def ongoing_operation_method(method: callable) -> callable:
 
 """Main class"""
 
+
 class BotSession:
     sessions: Dict[int, 'BotSession'] = {}
     id: int
@@ -118,6 +118,7 @@ class BotSession:
     def yes(self, update: tg.Update):
         if self.operation is OngoingOperation.START_MARATHON:
             self.marathon.start(target=self.update_handler())
+            update.message.reply_markdown(text="*_Alright, marathon has begun!_*")
 
     @cmd_handler('no')
     @ongoing_operation_method
@@ -182,6 +183,8 @@ class BotSession:
             except sem.MultipleUsersFoundError as err:
                 self.handle_error(err)
 
+    # TODO: remove participant
+
     @cmd_handler(pass_args=True)
     @marathon_method
     def set_duration(self, update: tg.Update, args: List[str]):
@@ -195,7 +198,6 @@ class BotSession:
 
     @cmd_handler()
     def start_marathon(self, update: tg.Update):
-        # TODO: start marathon backend
         text = '\n\n'.join(("Starting the marathon with the following settings:",
                             self.settings_msg(),
                             "Continue?\t/yes\t /no"))
@@ -233,7 +235,7 @@ class BotSession:
 
             def per_site():
                 for site, increment in update.per_site.items():
-                    yield "_{}_ ({:+})".format(sem.SITES[site]['name'], increment)
+                    yield " _{}_  ({:+})".format(sem.SITES[site]['name'], increment)
 
             text = "*{}* just gained *{:+}* reputation on".format(update.participant, update.total)
             text += ', '.join(per_site())
