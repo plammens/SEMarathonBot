@@ -92,7 +92,7 @@ class BotSession:
 
             yield "\n*Sites*:"
             for site in self.marathon.sites:
-                yield "\t - {}".format(sem.SITES[site]["name"])
+                yield "\t - {}".format(sem.SITES[site]['name'])
 
             yield "\n*Participants*:"
             for participant in self.marathon.participants.values():
@@ -110,14 +110,16 @@ class BotSession:
         def msg_lines(p: sem.Participant):
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
-                yield "\t - {}: user ID {}".format(sem.SITES[site]["name"], p.user(site).id)
+                user = p.user(site)
+                yield " - _{}_ : [user ID {}]({})".format(sem.SITES[site]['name'], user.id, user.link)
             yield ""
             yield "Please verify the IDs are correct."
 
         for username in args:
             try:
                 self.marathon.add_participant(username)
-                update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[username])))
+                update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[username])),
+                                              disable_web_page_preview=True)
             except sem.UserNotFoundError as err:
                 self.handle_error(err)
             except sem.MultipleUsersFoundError as err:
@@ -126,11 +128,12 @@ class BotSession:
 
     @cmd_handler(pass_args=True)
     def set_duration(self, update: tg.Update, args: List[str]):
-        # TODO: set duration
         if not self.marathon_created(): return
         if len(args) != 1: self.handle_error(BotArgumentError("Expected only one argument"))
         try:
-            self.marathon.duration = int(args[0])
+            duration = int(args[0])
+            self.marathon.duration = duration
+            update.message.reply_markdown("Set the duration to *{}h*".format(duration))
         except ValueError:
             self.handle_error(BotArgumentError("Invalid duration given"))
 

@@ -62,6 +62,7 @@ class Participant:
             user_data = results[0]
 
             self.id = user_data['user_id']
+            self.link = SITES[site]['site_url'] + '/users/{}/'.format(self.id)
             self.last_checked = time()
             self.score = 0
 
