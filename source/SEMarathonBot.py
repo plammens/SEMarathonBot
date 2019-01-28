@@ -213,6 +213,17 @@ class BotSession:
         self.operation = OngoingOperation.START_MARATHON
         update.message.reply_markdown(text=text)
 
+    @cmd_handler()
+    @marathon_method
+    def leaderboard(self, update: tg.Update):
+        def lines():
+            yield "LEADERBOARD\n"
+            participants = self.marathon.participants.values()
+            for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
+                yield "{}. *{}* – {} points".format(i, p, p.score)
+
+        update.message.reply_markdown(text='\n'.join(lines()))
+
 
     def marathon_created(self) -> bool:
         if not self.marathon:
