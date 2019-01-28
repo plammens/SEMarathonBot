@@ -83,10 +83,9 @@ class BotSession:
             update.message.reply_markdown(text=file.read().strip())
 
     @cmd_handler()
+    @marathon_method
     def settings(self, update: tg.Update):
         """Show settings"""
-        if not self.marathon_created(): return
-
         def msg_lines():
             yield "Current settings for marathon:"
 
@@ -103,10 +102,9 @@ class BotSession:
         update.message.reply_markdown(text='\n'.join(msg_lines()))
 
     @cmd_handler(pass_args=True)
+    @marathon_method
     def add_participants(self, update: tg.Update, args: List[str]):
         """Add participants to marathon"""
-        if not self.marathon_created(): return
-
         def msg_lines(p: sem.Participant):
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
@@ -127,8 +125,8 @@ class BotSession:
 
 
     @cmd_handler(pass_args=True)
+    @marathon_method
     def set_duration(self, update: tg.Update, args: List[str]):
-        if not self.marathon_created(): return
         if len(args) != 1: self.handle_error(BotArgumentError("Expected only one argument"))
         try:
             duration = int(args[0])

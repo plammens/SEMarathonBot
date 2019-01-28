@@ -13,3 +13,12 @@ class reply_to_message(telegram.ext.filters.BaseFilter):
 
     def filter(self, message: telegram.Message):
         return message.reply_to_message.message_id == self.message_id
+
+
+def marathon_method(method: callable) -> callable:
+    def decorated_method(session, *args, **kwargs):
+        if not session.marathon_created(): return
+        method(session, *args, **kwargs)
+
+    decorated_method.__name__ = method.__name__
+    return decorated_method
