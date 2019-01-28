@@ -4,9 +4,11 @@ print("Initializing server... ", end='')
 
 import telegram as tg
 import telegram.ext as tge
+import telegram.ext.filters as tgf
+from telegram.parsemode import ParseMode
 
 import marathon as sem
-from utils import debug_print
+from utils import *
 
 
 with open('token.txt') as token_file:
@@ -113,9 +115,9 @@ class BotSession:
                 self.marathon.add_participant(username)
                 update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[username])))
             except sem.UserNotFoundError as err:
-                self.send_error_message(err)
+                self.handle_error(err)
             except sem.MultipleUsersFoundError as err:
-                self.send_error_message(err)
+                self.handle_error(err)
 
 
     @cmd_handler(pass_args=True)
@@ -133,8 +135,20 @@ class BotSession:
             return False
         return True
 
-    def send_error_message(self, error: Exception):
-        BOT.send_message(chat_id=self.id, text="*ERROR*: {}".format(error))
+    def handle_error(self, error: Exception, additional_msg: str = "", *,
+                     require_action: bool = False, callback: callable = None):
+        error_text = '\n\n'.join(("*ERROR*: {}".format(error), additional_msg))
+        error_message = BOT.send_message(chat_id=self.id, text=error_text, parse_mode=ParseMode.MARKDOWN)
+
+        if require_action:
+            filters = tgf.Filters.chat(self.id) & reply_to_message(error_message)
+
+            def modified_callback(bot, update):
+                callback(bot, update)
+                DISPATCHER.remove_handler(handler)
+
+            handler = tge.MessageHandler(filters=filters, callback=modified_callback)
+            DISPATCHER.add_handler(handler)
 
 
 print("Done.")
