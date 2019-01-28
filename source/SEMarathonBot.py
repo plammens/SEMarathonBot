@@ -30,7 +30,9 @@ class OngoingOperation(Enum):
 
 """Method decorators"""
 
-def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = False,
+
+def cmd_handler(cmd: str = None, *,
+                pass_session: bool = True, pass_bot: bool = False, pass_update: bool = True,
                 **cmd_handler_kwargs) -> callable:
     """Returns specialized decorator for CommandHandler callback functions"""
 
@@ -43,12 +45,12 @@ def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = 
             chat_id = update.message.chat_id
             session = BotSession.sessions.get(chat_id, None)
             if pass_session and session is None: return
-            effective_args = {
-                (True, True):   (session, bot, update, *args),
-                (True, False):  (session, update, *args),
-                (False, True):  (bot, update, *args),
-                (False, False): (update, *args)
-            }[pass_session, pass_bot]
+
+            effective_args = []
+            if pass_session: effective_args.append(session)
+            if pass_bot: effective_args.append(bot)
+            if pass_update: effective_args.append(update)
+            effective_args.extend(args)
 
             debug_print("/{} served".format(callback.__name__))
             return callback(*effective_args, **kwargs)
