@@ -99,8 +99,9 @@ class Participant:
             self._users[site] = Participant.User(site, self.name)
         return self._users[site]
 
-    def fetch_user(self, site: str):
-        self._users[site] = Participant.User(site, self.name)
+    def fetch_users(self, *sites: str):
+        for site in sites:
+            self._users[site] = Participant.User(site, self.name)
 
 
 class Update:
@@ -139,11 +140,11 @@ class Marathon:
         if site not in SITE_NAMES: raise SiteNotFoundError(site)
         self.sites.append(site)
         for participant in self.participants.values():
-            participant.fetch_user(site)
+            participant.fetch_users(site)
 
     def add_participant(self, username: str):
         p = Participant(username)
-        p.fetch_user(*self.sites)
+        p.fetch_users(*self.sites)
         self.participants[username] = p
 
     def poll(self):
