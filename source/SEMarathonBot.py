@@ -114,7 +114,7 @@ class BotSession:
     @ongoing_operation_method
     def yes(self, update: tg.Update):
         if self.operation is OngoingOperation.START_MARATHON:
-            self.marathon.start()
+            self.marathon.start(target=self.update_handler())
 
     @cmd_handler('no')
     @ongoing_operation_method
@@ -204,6 +204,19 @@ class BotSession:
             yield "\n*Duration*: {}h".format(self.marathon.duration)
 
         return '\n'.join(lines())
+
+    @coroutine
+    def update_handler(self):
+        while True:
+            update: sem.Update = (yield)
+
+            def per_site():
+                for site, increment in update.per_site.items():
+                    yield "_{}_ ({:+})".format(sem.SITES[site]['name'], increment)
+
+            text = "*{}* just gained *{:+}* reputation on".format(update.participant, update.total)
+            text += ', '.join(per_site())
+            BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
     def handle_error(self, error: Exception, additional_msg: str = "", *,
                      require_action: bool = False, callback: callable = None):

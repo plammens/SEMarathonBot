@@ -1,4 +1,5 @@
 import json
+import threading
 from time import time, sleep
 from typing import List, Dict
 
@@ -79,6 +80,9 @@ class Participant:
         self.name = username
         self._users = {}
 
+    def __str__(self):
+        return self.name
+
     @property
     def score(self):
         return sum(u.score for u in self._users.values())
@@ -119,11 +123,15 @@ class Marathon:
     sites: List[str]
     participants: Dict[str, Participant]
     duration: int
+    start_time: int
+    end_time: int
 
     def __init__(self, *sites: str):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
         self.participants = {}
         self.duration = 12
+        self.start_time = None
+        self.end_time = None
 
     def add_site(self, site: str):
         if site not in SITES: raise SiteNotFoundError(site)
@@ -144,7 +152,15 @@ class Marathon:
                 if increment: update[site] = increment
             if update: yield update
 
-    def start(self):
-        while True:
-            yield from self.poll()
-            sleep(60)
+    def start(self, target: callable):
+        self.start_time = time()
+        self.end_time = self.start_time + 3600*self.duration
+
+        def run():
+            while time() < self.end_time:
+                for update in self.poll():
+                    target.send(update)
+                sleep(10)
+
+        poll_thread = threading.Thread(name="MarathonPoll", target=run, daemon=True)
+        poll_thread.start()

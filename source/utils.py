@@ -15,3 +15,10 @@ class reply_to_message(telegram.ext.filters.BaseFilter):
         return message.reply_to_message.message_id == self.message_id
 
 
+def coroutine(func: callable):
+    def start(*args, **kwargs):
+        coro = func(*args, **kwargs)
+        coro.send(None)
+        return coro
+
+    return start
