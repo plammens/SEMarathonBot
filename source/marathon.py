@@ -1,23 +1,11 @@
+import json
 from time import time, sleep
 from typing import List, Dict
 
 import stackapi
 
-SITE_NAMES = {'stackoverflow': 'Stack Overflow',
-              'serverfault': 'Server Fault',
-              'superuser': 'Super User',
-              'webapps': 'Web Applications',
-              'gaming': 'Arqade',
-              'webmasters': 'Webmasters',
-              'cooking': 'Seasoned Advice',
-              'gamedev': 'Game Development',
-              'photo': 'Photography',
-              'stats': 'Cross Validated',
-              'math': 'Mathematics',
-              'diy': 'Home Improvement',
-              'gis': 'Geographic Information Systems',
-              'tex': 'TeX - LaTeX',
-              'askubuntu': 'Ask Ubuntu'}
+with open('source/SE-Sites.json') as db:
+    SITES = json.load(db)
 DEFAULT_SITES = ('stackoverflow', 'math', 'tex')
 APIS = {name: stackapi.StackAPI(name) for name in DEFAULT_SITES}
 
@@ -137,7 +125,7 @@ class Marathon:
         self.duration = 12
 
     def add_site(self, site: str):
-        if site not in SITE_NAMES: raise SiteNotFoundError(site)
+        if site not in SITES: raise SiteNotFoundError(site)
         self.sites.append(site)
         for participant in self.participants.values():
             participant.fetch_users(site)
