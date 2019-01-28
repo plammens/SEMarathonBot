@@ -25,11 +25,10 @@ class BotArgumentError(ValueError):
 
 
 class OngoingOperation(Enum):
-    START_MARATHON = 1
+    START_MARATHON = "start marathon"
 
 
 """Method decorators"""
-
 
 def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = False,
                 **cmd_handler_kwargs) -> callable:
@@ -56,13 +55,13 @@ def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = 
 
         handler = tge.CommandHandler(cmd, decorated, **cmd_handler_kwargs)
         DISPATCHER.add_handler(handler)
-        return handler
+        return callback
 
     return decorator
 
 
 def marathon_method(method: callable) -> callable:
-    def decorated_method(session: BotSession, *args, **kwargs):
+    def decorated_method(session: 'BotSession', *args, **kwargs):
         if not session.marathon_created(): return
         method(session, *args, **kwargs)
 
@@ -71,7 +70,7 @@ def marathon_method(method: callable) -> callable:
 
 
 def ongoing_operation_method(method: callable) -> callable:
-    def decorated_method(session: BotSession, *args, **kwargs):
+    def decorated_method(session: 'BotSession', *args, **kwargs):
         if not session.operation: return
         method(session, *args, **kwargs)
         session.operation = None
@@ -111,18 +110,18 @@ class BotSession:
 
     @cmd_handler('yes')
     @ongoing_operation_method
-    def yes(self, update):
+    def yes(self, update: tg.Update):
         if self.operation is OngoingOperation.START_MARATHON:
-            print('success')
+            self.marathon.start()
 
     @cmd_handler('no')
     @ongoing_operation_method
-    def no(self, update):
-        pass
+    def no(self, update: tg.Update):
+        self.cancel(update)
 
     @cmd_handler('cancel')
-    def cancel(self, update):
-        pass
+    def cancel(self, update: tg.Update):
+        update.message.reply_text("Cancelled the operation '{}'".format(self.operation.value))
 
     @cmd_handler()
     def new_marathon(self, update: tg.Update):
