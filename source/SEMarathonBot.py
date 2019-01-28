@@ -92,7 +92,7 @@ class BotSession:
 
             yield "\n*Sites*:"
             for site in self.marathon.sites:
-                yield "\t - {}".format(sem.SITES[site]["name"])
+                yield "\t - {}".format(sem.SITES[site]['name'])
 
             yield "\n*Participants*:"
             for participant in self.marathon.participants.values():
@@ -110,7 +110,8 @@ class BotSession:
         def msg_lines(p: sem.Participant):
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
-                yield "\t - {}: user ID {}".format(sem.SITES[site]["name"], p.user(site).id)
+                user = p.user(site)
+                yield " - _{}_ : [user ID {}]({})".format(sem.SITES[site]['name'], user.id, user.link)
             yield ""
             yield "Please verify the IDs are correct."
 
