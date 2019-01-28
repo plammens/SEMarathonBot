@@ -28,11 +28,9 @@ def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = 
         if cmd is None: cmd = callback.__name__
 
         def decorated(bot, update, *args, **kwargs):
-            debug_print("/{} reached".format(callback.__name__))
-
             chat_id = update.message.chat_id
             session = BotSession.sessions.get(chat_id, None)
-            # if pass_session and session is None: return
+            if pass_session and session is None: return
             effective_args = {
                 (True, True): (session, bot, update, *args),
                 (True, False): (session, update, *args),
