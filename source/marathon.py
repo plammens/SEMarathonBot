@@ -1,6 +1,7 @@
+import datetime
 import json
 import threading
-from time import time, sleep
+import time
 from typing import List, Dict
 
 import stackapi
@@ -69,7 +70,7 @@ class Participant:
 
             self.id = user_data['user_id']
             self.link = SITES[site]['site_url'] + '/users/{}/'.format(self.id)
-            self.last_checked = int(time())
+            self.last_checked = int(time.time())
             self.score = 0
 
         def update(self) -> bool:
@@ -127,16 +128,18 @@ class Update:
 class Marathon:
     sites: List[str]
     participants: Dict[str, Participant]
-    duration: int
-    start_time: int
-    end_time: int
+    duration: datetime.timedelta
+    start_time: datetime.datetime
 
     def __init__(self, *sites: str):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
         self.participants = {}
-        self.duration = 12
+        self.duration = datetime.timedelta(hours=12)
         self.start_time = None
-        self.end_time = None
+
+    @property
+    def end_time(self):
+        return self.start_time + self.duration
 
     def add_site(self, site: str):
         if site not in SITES: raise SiteNotFoundError(site)
@@ -161,14 +164,13 @@ class Marathon:
             if update: yield update
 
     def start(self, target: callable):
-        self.start_time = time()
-        self.end_time = self.start_time + 3600*self.duration
+        self.start_time = datetime.datetime.now()
 
         def run():
-            while time() < self.end_time:
+            while datetime.datetime.now() < self.end_time:
                 for update in self.poll():
                     target.send(update)
-                sleep(10)
+                time.sleep(10)
 
         poll_thread = threading.Thread(name="MarathonPoll", target=run, daemon=True)
         poll_thread.start()

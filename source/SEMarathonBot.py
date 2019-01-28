@@ -1,6 +1,7 @@
 print("Initializing server... ", end='')
 
 import atexit
+import datetime
 from enum import Enum
 from typing import List, Dict
 
@@ -17,7 +18,7 @@ with open('token.txt') as token_file:
     TOKEN: str = token_file.read().strip()
 
 UPDATER = tge.Updater(token=TOKEN)
-BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
+BOT, DISPATCHER, JOB_QUEUE = UPDATER.bot, UPDATER.dispatcher, UPDATER.job_queue
 
 """Helper classes"""
 
@@ -65,9 +66,32 @@ def cmd_handler(cmd: str = None, *,
     return decorator
 
 
+def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
+    """Returns specialized decorator for Job callback functions"""
+
+    def decorator(callback: callable) -> callable:
+        """Actual decorator"""
+
+        def decorated(bot, job, *args, **kwargs):
+            chat_id = job.context
+            session = BotSession.sessions.get(chat_id, None)
+            if pass_session and session is None: return
+
+            effective_args = []
+            if pass_session: effective_args.append(session)
+            if pass_bot: effective_args.append(bot)
+            effective_args.extend(args)
+
+            return callback(*effective_args, **kwargs)
+
+        return decorated
+
+    return decorator
+
+
 def marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session.marathon_created(): return
+        if not session._marathon_created(): return
         method(session, *args, **kwargs)
 
     decorated_method.__name__ = method.__name__
@@ -92,27 +116,29 @@ class BotSession:
     id: int
     marathon: sem.Marathon
     operation: OngoingOperation
+    marathon_jobs: List[tge.Job]
 
     def __init__(self, chat_id: int):
         BotSession.sessions[chat_id] = self
         self.id = chat_id
         self.marathon = None
         self.operation = None
+        self.marathon_jobs = []
 
     @staticmethod
     @cmd_handler(pass_session=False)
     def info(update: tg.Update):
         """Show info message"""
-        with open('text/info.md') as file:
-            update.message.reply_markdown(file.read().strip())
+        with open('text/info.md') as text:
+            update.message.reply_markdown(text.read().strip())
 
     @staticmethod
     @cmd_handler(pass_session=False)
     def start(update: tg.Update):
         """Start session"""
         BotSession(update.message.chat_id)
-        with open('text/start.txt') as file:
-            update.message.reply_text(text=file.read().strip())
+        with open('text/start.txt') as text:
+            update.message.reply_text(text=text.read().strip())
 
     @cmd_handler()
     def shutdown(self, update: tg.Update):
@@ -122,12 +148,11 @@ class BotSession:
     @cmd_handler('yes')
     @ongoing_operation_method
     def yes(self, update: tg.Update):
+        # TODO: extract methods
         if self.operation is OngoingOperation.START_MARATHON:
-            self.marathon.start(target=self.update_handler())
-            update.message.reply_markdown(text="*_Alright, marathon has begun!_*")
+            self._start_marathon()
         elif self.operation is OngoingOperation.SHUTDOWN:
-            del BotSession.sessions[self.id]
-            update.message.reply_text(text="I'm now sleeping. Reactivate with /start.")
+            self._shutdown()
 
     @cmd_handler('no')
     @ongoing_operation_method
@@ -142,14 +167,14 @@ class BotSession:
     def new_marathon(self, update: tg.Update):
         """Create new marathon"""
         self.marathon = sem.Marathon()
-        with open('text/new_marathon.txt') as file:
-            update.message.reply_markdown(text=file.read().strip())
+        with open('text/new_marathon.txt') as text:
+            update.message.reply_markdown(text=text.read().strip())
 
     @cmd_handler()
     @marathon_method
     def settings(self, update: tg.Update):
         """Show settings"""
-        update.message.reply_markdown(text=self.settings_msg())
+        update.message.reply_markdown(text=self._settings_text())
 
     @cmd_handler(pass_args=True)
     @marathon_method
@@ -159,11 +184,11 @@ class BotSession:
             try:
                 self.marathon.add_site(site)
             except sem.SiteNotFoundError as err:
-                self.handle_error(err)
+                self._handle_error(err)
             except sem.UserNotFoundError as err:
-                self.handle_error(err)
+                self._handle_error(err)
             except sem.MultipleUsersFoundError as err:
-                self.handle_error(err)
+                self._handle_error(err)
 
         text = "Successfully set sites "
         text += ', '.join("_{}_".format(sem.SITES[site]['name']) for site in self.marathon.sites)
@@ -188,27 +213,27 @@ class BotSession:
                 update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[username])),
                                               disable_web_page_preview=True)
             except sem.UserNotFoundError as err:
-                self.handle_error(err)
+                self._handle_error(err)
             except sem.MultipleUsersFoundError as err:
-                self.handle_error(err)
+                self._handle_error(err)
 
     # TODO: remove participant
 
     @cmd_handler(pass_args=True)
     @marathon_method
     def set_duration(self, update: tg.Update, args: List[str]):
-        if len(args) != 1: self.handle_error(BotArgumentError("Expected only one argument"))
+        if len(args) != 1: self._handle_error(BotArgumentError("Expected only one argument"))
         try:
             duration = int(args[0])
-            self.marathon.duration = duration
+            self.marathon.duration = datetime.timedelta(hours=duration)
             update.message.reply_markdown("Set the duration to *{}h*".format(duration))
         except ValueError:
-            self.handle_error(BotArgumentError("Invalid duration given"))
+            self._handle_error(BotArgumentError("Invalid duration given"))
 
     @cmd_handler()
     def start_marathon(self, update: tg.Update):
         text = '\n\n'.join(("Starting the marathon with the following settings:",
-                            self.settings_msg(),
+                            self._settings_text(),
                             "Continue?\t/yes\t /no"))
         self.operation = OngoingOperation.START_MARATHON
         update.message.reply_markdown(text=text)
@@ -216,23 +241,28 @@ class BotSession:
     @cmd_handler()
     @marathon_method
     def leaderboard(self, update: tg.Update):
-        def lines():
-            yield "LEADERBOARD\n"
-            participants = self.marathon.participants.values()
-            for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                yield "{}. *{}* – {} points".format(i, p, p.score)
-
-        update.message.reply_markdown(text='\n'.join(lines()))
+        update.message.reply_markdown(text=self._leaderboard_text())
 
 
-    def marathon_created(self) -> bool:
+    @job_callback()
+    def send_status_update(self):
+        now = datetime.datetime.now()
+        elapsed = now - self.marathon.start_time
+        remaining = self.marathon.end_time - now
+        with open('text/running_status.md') as text:
+            header = text.read().strip().format(elapsed, remaining)
+        text = '\n\n'.join((header, self._leaderboard_text()))
+        BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
+
+
+    def _marathon_created(self) -> bool:
         if not self.marathon:
-            with open('text/marathon_not_created.txt') as file:
-                BOT.send_message(chat_id=self.id, text=file.read().strip())
+            with open('text/marathon_not_created.txt') as text:
+                BOT.send_message(chat_id=self.id, text=text.read().strip())
             return False
         return True
 
-    def settings_msg(self) -> str:
+    def _settings_text(self) -> str:
         def lines():
             yield "Current settings for marathon:"
 
@@ -244,12 +274,30 @@ class BotSession:
             for participant in self.marathon.participants.values():
                 yield "\t - {}".format(participant.name)
 
-            yield "\n*Duration*: {}h".format(self.marathon.duration)
+            yield "\n*Duration*: {}".format(self.marathon.duration)
+
+        return '\n'.join(lines())
+
+    def _start_marathon(self):
+        self.marathon.start(target=self._marathon_update_handler())
+        BOT.send_message(chat_id=self.id, text="*_Alright, marathon has begun!_*",
+                         parse_mode=ParseMode.MARKDOWN)
+        refresh_job = JOB_QUEUE.run_repeating(name='periodic updates',
+                                              callback=self.send_status_update,
+                                              interval=datetime.timedelta(minutes=30))
+        self.marathon_jobs.append(refresh_job)
+
+    def _leaderboard_text(self) -> str:
+        def lines():
+            yield "LEADERBOARD\n"
+            participants = self.marathon.participants.values()
+            for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
+                yield "{}. *{}* – {} points".format(i, p, p.score)
 
         return '\n'.join(lines())
 
     @coroutine
-    def update_handler(self):
+    def _marathon_update_handler(self):
         while True:
             update: sem.Update = (yield)
 
@@ -261,8 +309,8 @@ class BotSession:
             text += ', '.join(per_site())
             BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
-    def handle_error(self, error: Exception, additional_msg: str = "", *,
-                     require_action: bool = False, callback: callable = None):
+    def _handle_error(self, error: Exception, additional_msg: str = "", *,
+                      require_action: bool = False, callback: callable = None):
         error_text = '\n\n'.join(("*ERROR*: {}".format(error), additional_msg))
         error_message = BOT.send_message(chat_id=self.id, text=error_text, parse_mode=ParseMode.MARKDOWN)
 
@@ -275,6 +323,10 @@ class BotSession:
 
             handler = tge.MessageHandler(filters=filters, callback=modified_callback)
             DISPATCHER.add_handler(handler)
+
+    def _shutdown(self):
+        del BotSession.sessions[self.id]
+        BOT.send_message(chat_id=self.id, text="I'm now sleeping. Reactivate with /start.")
 
 
 def notify_shutdown():
