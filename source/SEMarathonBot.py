@@ -91,7 +91,7 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
 
 def marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session._marathon_created(): return
+        if not session.marathon_created(): return
         method(session, *args, **kwargs)
 
     decorated_method.__name__ = method.__name__
@@ -145,10 +145,9 @@ class BotSession:
         self.operation = OngoingOperation.SHUTDOWN
         update.message.reply_text("Are you sure? /yes \t /no")
 
-    @cmd_handler('yes')
+    @cmd_handler('yes', pass_update=False)
     @ongoing_operation_method
-    def yes(self, update: tg.Update):
-        # TODO: extract methods
+    def yes(self):
         if self.operation is OngoingOperation.START_MARATHON:
             self._start_marathon()
         elif self.operation is OngoingOperation.SHUTDOWN:
@@ -255,7 +254,7 @@ class BotSession:
         BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
 
-    def _marathon_created(self) -> bool:
+    def marathon_created(self) -> bool:
         if not self.marathon:
             with open('text/marathon_not_created.txt') as text:
                 BOT.send_message(chat_id=self.id, text=text.read().strip())
