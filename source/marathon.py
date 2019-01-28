@@ -4,7 +4,7 @@ from typing import List, Dict
 
 import stackapi
 
-with open('source/SE-Sites.json') as db:
+with open('db/SE-Sites.json') as db:
     SITES = json.load(db)
 DEFAULT_SITES = ('stackoverflow', 'math', 'tex')
 APIS = {name: stackapi.StackAPI(name) for name in DEFAULT_SITES}
