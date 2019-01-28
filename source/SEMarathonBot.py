@@ -146,7 +146,7 @@ class BotSession:
 
     def marathon_created(self) -> bool:
         if not self.marathon:
-            with open('marathon_not_created.txt') as file:
+            with open('text/marathon_not_created.txt') as file:
                 BOT.send_message(chat_id=self.id, text=file.read().strip())
             return False
         return True
