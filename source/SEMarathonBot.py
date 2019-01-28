@@ -257,6 +257,16 @@ class BotSession:
             DISPATCHER.add_handler(handler)
 
 
+def notify_shutdown():
+    UPDATER.stop()
+    for chat in BotSession.sessions:
+        BOT.send_message(chat_id=chat,
+                         text="*SERVER SHUTDOWN* – Going to sleep with the fishes...",
+                         parse_mode=ParseMode.MARKDOWN)
+
+
+atexit.register(notify_shutdown)
+
 print("Done.")
 
 if __name__ == '__main__':
