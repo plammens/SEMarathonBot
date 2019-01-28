@@ -239,11 +239,17 @@ class BotSession:
     @cmd_handler(pass_args=True)
     @marathon_method
     def set_duration(self, update: tg.Update, args: List[str]):
-        if len(args) != 1: self._handle_error(BotArgumentError("Expected only one argument"))
         try:
-            duration = int(args[0])
-            self.marathon.duration = datetime.timedelta(hours=duration)
-            update.message.reply_markdown("Set the duration to *{}h*".format(duration))
+            hours, minutes = 0, 0
+            if len(args) == 1:
+                hours = int(args[0])
+            elif len(args) == 2:
+                hours, minutes = int(args[0]), int(args[1])
+            else:
+                self._handle_error(BotArgumentError("Expected one or two argument"))
+
+            self.marathon.duration = datetime.timedelta(hours=hours, minutes=minutes)
+            update.message.reply_markdown("Set the duration to *{}* ( _hh:mm:ss_ )".format(self.marathon.duration))
         except ValueError:
             self._handle_error(BotArgumentError("Invalid duration given"))
 
@@ -308,7 +314,7 @@ class BotSession:
             for participant in self.marathon.participants.values():
                 yield "\t - {}".format(participant.name)
 
-            yield "\n*Duration*: {}".format(self.marathon.duration)
+            yield "\n*Duration*: {} ( _hh:mm:ss_ )".format(self.marathon.duration)
 
         return '\n'.join(lines())
 
