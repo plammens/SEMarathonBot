@@ -21,6 +21,7 @@ BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
 def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = False,
                 **cmd_handler_kwargs) -> callable:
     """Returns specialized decorator for CommandHandler callback functions"""
+
     def decorator(callback: callable) -> tge.CommandHandler:
         """Actual decorator"""
         nonlocal cmd
@@ -70,7 +71,6 @@ class BotSession:
         with open('text/info.md') as file:
             update.message.reply_markdown(file.read().strip())
 
-
     @staticmethod
     @cmd_handler(pass_session=False)
     def start(update: tg.Update):
@@ -90,25 +90,13 @@ class BotSession:
     @marathon_method
     def settings(self, update: tg.Update):
         """Show settings"""
-        def msg_lines():
-            yield "Current settings for marathon:"
-
-            yield "\n*Sites*:"
-            for site in self.marathon.sites:
-                yield "\t - {}".format(sem.SITES[site]['name'])
-
-            yield "\n*Participants*:"
-            for participant in self.marathon.participants.values():
-                yield "\t - {}".format(participant.name)
-
-            yield "\n*Duration*: {}h".format(self.marathon.duration)
-
-        update.message.reply_markdown(text='\n'.join(msg_lines()))
+        update.message.reply_markdown(text=self.settings_msg())
 
     @cmd_handler(pass_args=True)
     @marathon_method
     def add_participants(self, update: tg.Update, args: List[str]):
         """Add participants to marathon"""
+
         def msg_lines(p: sem.Participant):
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
@@ -127,7 +115,6 @@ class BotSession:
             except sem.MultipleUsersFoundError as err:
                 self.handle_error(err)
 
-
     @cmd_handler(pass_args=True)
     @marathon_method
     def set_duration(self, update: tg.Update, args: List[str]):
@@ -140,11 +127,13 @@ class BotSession:
             self.handle_error(BotArgumentError("Invalid duration given"))
 
     @cmd_handler()
-    def start_marathon(self, update: tg.Update, ):
+    def start_marathon(self, update: tg.Update):
         # TODO: start marathon backend
-        update.message.reply_text(text="Starting the marathon with the following settings:")
-        self.settings(update)  # TODO: refactor message out
-        update.message.reply_text(text="Continue?\n/yes /no")
+        text = '\n\n'.join(("Starting the marathon with the following settings:",
+                            self.settings_msg(),
+                            "Continue?\n/yes /no"))
+        update.message.reply_markdown(text=text)
+
 
     def marathon_created(self) -> bool:
         if not self.marathon:
@@ -152,6 +141,22 @@ class BotSession:
                 BOT.send_message(chat_id=self.id, text=file.read().strip())
             return False
         return True
+
+    def settings_msg(self) -> str:
+        def lines():
+            yield "Current settings for marathon:"
+
+            yield "\n*Sites*:"
+            for site in self.marathon.sites:
+                yield "\t - {}".format(sem.SITES[site]['name'])
+
+            yield "\n*Participants*:"
+            for participant in self.marathon.participants.values():
+                yield "\t - {}".format(participant.name)
+
+            yield "\n*Duration*: {}h".format(self.marathon.duration)
+
+        return '\n'.join(lines())
 
     def handle_error(self, error: Exception, additional_msg: str = "", *,
                      require_action: bool = False, callback: callable = None):
