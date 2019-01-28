@@ -28,12 +28,14 @@ class UserError(LookupError):
 
 class UserNotFoundError(UserError):
     def __str__(self):
-        return "User {} not found at {}".format(self.user.name, self.user.site)
+        return "User {} not found at {}".format(self.user.name,
+                                                SITES[self.user.site]['name'])
 
 
 class MultipleUsersFoundError(UserError):
     def __str__(self):
-        return "Multiple candidates found for user '{}' at {}".format(self.user.name, self.user.site)
+        return "Multiple candidates found for user '{}' at {}".format(self.user.name,
+                                                                      SITES[self.user.site]['name'])
 
 
 class SiteError(LookupError):
