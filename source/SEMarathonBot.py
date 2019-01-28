@@ -45,6 +45,10 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
     return decorator
 
 
+class BotArgumentError(ValueError):
+    pass
+
+
 class BotSession:
     sessions: Dict[int, 'BotSession'] = {}
     id: int
@@ -122,11 +126,20 @@ class BotSession:
 
     @cmd_handler(pass_args=True)
     def set_duration(self, update: tg.Update, args: List[str]):
-        pass
+        # TODO: set duration
+        if not self.marathon_created(): return
+        if len(args) != 1: self.handle_error(BotArgumentError("Expected only one argument"))
+        try:
+            self.marathon.duration = int(args[0])
+        except ValueError:
+            self.handle_error(BotArgumentError("Invalid duration given"))
 
     @cmd_handler()
     def start_marathon(self, update: tg.Update, ):
-        update.message.reply_text(text="Creating new marathon...")
+        # TODO: start marathon backend
+        update.message.reply_text(text="Starting the marathon with the following settings:")
+        self.settings(update)  # TODO: refactor message out
+        update.message.reply_text(text="Continue?\n/yes /no")
 
     def marathon_created(self) -> bool:
         if not self.marathon:
