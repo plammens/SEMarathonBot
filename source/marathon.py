@@ -141,6 +141,19 @@ class Marathon:
     def end_time(self):
         return self.start_time + self.duration
 
+    @property
+    def refresh_interval(self):
+        if self.duration >= datetime.timedelta(hours=2):
+            return datetime.timedelta(minutes=30)
+        elif self.duration >= datetime.timedelta(minutes=45):
+            return datetime.timedelta(minutes=15)
+        elif self.duration >= datetime.timedelta(minutes=15):
+            return datetime.timedelta(minutes=5)
+        elif self.duration >= datetime.timedelta(minutes=10):
+            return datetime.timedelta(minutes=2)
+        else:
+            return datetime.timedelta(minutes=1)
+
     def add_site(self, site: str):
         if site not in SITES: raise SiteNotFoundError(site)
         self.sites.append(site)

@@ -283,7 +283,7 @@ class BotSession:
                          parse_mode=ParseMode.MARKDOWN)
         refresh_job = JOB_QUEUE.run_repeating(name='periodic updates',
                                               callback=self.send_status_update,
-                                              interval=datetime.timedelta(minutes=30))
+                                              interval=self.marathon.refresh_interval)
         self.marathon_jobs.append(refresh_job)
 
     def _leaderboard_text(self) -> str:
