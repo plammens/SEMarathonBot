@@ -89,9 +89,29 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
     return decorator
 
 
+# def check(callback: callable, callback_args: tuple = None, callback_kwargs: dict = None):
+#     def decorator(method: callable) -> callable:
+#         def decorated(*args, **kwargs):
+#             if not callback(*callback_args, **callback_kwargs): return
+#             method(*args, **kwargs)
+#
+#         decorated.__name__ = method.__name__
+#         return decorated
+#
+#     return decorator
+
 def marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session.marathon_created(): return
+        if not session.check_marathon_created(): return
+        method(session, *args, **kwargs)
+
+    decorated_method.__name__ = method.__name__
+    return decorated_method
+
+
+def running_marathon_method(method: callable) -> callable:
+    def decorated_method(session: 'BotSession', *args, **kwargs):
+        if not session.check_marathon_running(): return
         method(session, *args, **kwargs)
 
     decorated_method.__name__ = method.__name__
@@ -116,14 +136,12 @@ class BotSession:
     id: int
     marathon: sem.Marathon
     operation: OngoingOperation
-    marathon_jobs: List[tge.Job]
 
     def __init__(self, chat_id: int):
         BotSession.sessions[chat_id] = self
         self.id = chat_id
         self.marathon = None
         self.operation = None
-        self.marathon_jobs = []
 
     @staticmethod
     @cmd_handler(pass_session=False)
@@ -243,7 +261,7 @@ class BotSession:
         update.message.reply_markdown(text=self._status_text())
 
     @cmd_handler()
-    @marathon_method
+    @running_marathon_method
     def leaderboard(self, update: tg.Update):
         update.message.reply_markdown(text=self._leaderboard_text())
 
@@ -253,11 +271,28 @@ class BotSession:
         text = '\n\n'.join((self._status_text(), self._leaderboard_text()))
         BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
+    @job_callback()
+    def countdown(self):
+        _, remaining = self.marathon.elapsed_remaining()
+        seconds = int(remaining.total_seconds())
+        minutes = seconds//60
+        if minutes >= 1:
+            text = "*{} minutes remaining!*".format(minutes)
+        else:
+            text = "_*{} seconds remaining!*_".format(seconds)
+        BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
-    def marathon_created(self) -> bool:
+
+    def check_marathon_created(self) -> bool:
         if not self.marathon:
             with open('text/marathon_not_created.txt') as text:
                 BOT.send_message(chat_id=self.id, text=text.read().strip())
+            return False
+        return True
+
+    def check_marathon_running(self) -> bool:
+        if not self.marathon.is_running:
+            BOT.send_message(chat_id=self, text="Only avalilable when marathon is running!")
             return False
         return True
 
@@ -281,10 +316,21 @@ class BotSession:
         self.marathon.start(target=self._marathon_update_handler())
         BOT.send_message(chat_id=self.id, text="*_Alright, marathon has begun!_*",
                          parse_mode=ParseMode.MARKDOWN)
-        refresh_job = JOB_QUEUE.run_repeating(name='periodic updates',
-                                              callback=self.send_status_update,
-                                              interval=self.marathon.refresh_interval)
-        self.marathon_jobs.append(refresh_job)
+        JOB_QUEUE.run_repeating(name='periodic updates',
+                                callback=self.send_status_update,
+                                interval=self.marathon.refresh_interval)
+        JOB_QUEUE.run_repeating(name='minute countdown',
+                                callback=self.countdown,
+                                interval=datetime.timedelta(minutes=1),
+                                first=self.marathon.end_time - datetime.timedelta(minutes=5))
+        JOB_QUEUE.run_repeating(name='15 seconds countdown',
+                                callback=self.countdown,
+                                interval=datetime.timedelta(seconds=45),
+                                first=self.marathon.end_time - datetime.timedelta(seconds=45))
+        JOB_QUEUE.run_repeating(name='5 seconds countdown',
+                                callback=self.countdown,
+                                interval=datetime.timedelta(seconds=1),
+                                first=self.marathon.end_time - datetime.timedelta(seconds=5))
 
     def _leaderboard_text(self) -> str:
         def lines():
@@ -295,11 +341,9 @@ class BotSession:
 
         return '\n'.join(lines())
 
-    def _status_text(self):
+    def _status_text(self) -> str:
         if self.marathon.is_running:
-            now = datetime.datetime.now()
-            elapsed = now - self.marathon.start_time
-            remaining = self.marathon.end_time - now
+            elapsed, remaining = self.marathon.elapsed_remaining()
             with open('text/running_status.md') as text:
                 return text.read().strip().format(elapsed, remaining)
         else:
@@ -335,6 +379,8 @@ class BotSession:
 
     def _shutdown(self):
         self.marathon.destroy()
+        for job in JOB_QUEUE.jobs():
+            job.schedule_removal()
         del BotSession.sessions[self.id]
         BOT.send_message(chat_id=self.id, text="I'm now sleeping. Reactivate with /start.")
 

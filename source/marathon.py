@@ -131,6 +131,7 @@ class Marathon:
     participants: Dict[str, Participant]
     duration: datetime.timedelta
     start_time: datetime.datetime
+    end_time: datetime.datetime
     poll_thread: StoppableThread
 
     def __init__(self, *sites: str):
@@ -138,14 +139,18 @@ class Marathon:
         self.participants = {}
         self.duration = datetime.timedelta(hours=12)
         self.start_time = None
+        self.end_time = None
         self.poll_thread = None
 
     @property
-    def end_time(self):
-        return self.start_time + self.duration
+    def elapsed_remaining(self) -> (datetime.timedelta, datetime.timedelta):
+        if not self.is_running:
+            raise RuntimeError("Marathon isn't running yet")
+        now = datetime.datetime.now()
+        return now - self.start_time, self.end_time - now
 
     @property
-    def refresh_interval(self):
+    def refresh_interval(self) -> datetime.timedelta:
         if self.duration >= datetime.timedelta(hours=2):
             return datetime.timedelta(minutes=30)
         elif self.duration >= datetime.timedelta(minutes=45):
@@ -158,7 +163,7 @@ class Marathon:
             return datetime.timedelta(minutes=1)
 
     @property
-    def is_running(self):
+    def is_running(self) -> bool:
         return self.poll_thread is not None and not self.poll_thread.stopped
 
     def add_site(self, site: str):
@@ -185,6 +190,7 @@ class Marathon:
 
     def start(self, target: callable):
         self.start_time = datetime.datetime.now()
+        self.end_time = self.start_time + self.duration
 
         def run():
             while datetime.datetime.now() < self.end_time:
