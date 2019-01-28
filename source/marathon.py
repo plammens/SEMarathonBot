@@ -1,10 +1,11 @@
 import datetime
 import json
-import threading
 import time
 from typing import List, Dict
 
 import stackapi
+
+from utils import StoppableThread
 
 with open('db/SE-Sites.json') as db:
     SITES = json.load(db)
@@ -130,12 +131,14 @@ class Marathon:
     participants: Dict[str, Participant]
     duration: datetime.timedelta
     start_time: datetime.datetime
+    poll_thread: StoppableThread
 
     def __init__(self, *sites: str):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
         self.participants = {}
         self.duration = datetime.timedelta(hours=12)
         self.start_time = None
+        self.poll_thread = None
 
     @property
     def end_time(self):
@@ -185,5 +188,10 @@ class Marathon:
                     target.send(update)
                 time.sleep(10)
 
-        poll_thread = threading.Thread(name="MarathonPoll", target=run, daemon=True)
-        poll_thread.start()
+        self.poll_thread = StoppableThread(name="MarathonPoll", target=run, daemon=True)
+        self.poll_thread.start()
+
+    def destroy(self):
+        if self.poll_thread is not None:
+            self.poll_thread.stop()
+            self.poll_thread.join()
