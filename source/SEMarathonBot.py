@@ -2,11 +2,14 @@ from typing import List, Dict
 
 print("Initializing server... ", end='')
 
+import atexit
+from enum import Enum
+from typing import List, Dict
+
 import telegram as tg
 import telegram.ext as tge
 import telegram.ext.filters as tgf
 from telegram.parsemode import ParseMode
-from enum import Enum
 
 import marathon as sem
 from utils import *
@@ -137,6 +140,24 @@ class BotSession:
     def settings(self, update: tg.Update):
         """Show settings"""
         update.message.reply_markdown(text=self.settings_msg())
+
+    @cmd_handler(pass_args=True)
+    @marathon_method
+    def set_sites(self, update: tg.Update, args: List[str]):
+        self.marathon.clear_sites()
+        for site in args:
+            try:
+                self.marathon.add_site(site)
+            except sem.SiteNotFoundError as err:
+                self.handle_error(err)
+            except sem.UserNotFoundError as err:
+                self.handle_error(err)
+            except sem.MultipleUsersFoundError as err:
+                self.handle_error(err)
+
+        text = "Successfully set sites "
+        text += ', '.join("_{}_".format(sem.SITES[site]['name']) for site in self.marathon.sites)
+        update.message.reply_markdown(text=text)
 
     @cmd_handler(pass_args=True)
     @marathon_method

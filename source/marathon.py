@@ -52,6 +52,9 @@ class Participant:
     name: str
 
     class User:
+        link: str
+        last_checked: int
+
         def __init__(self, site: str, username: str):
             self.site = site
             self.name = username
@@ -66,7 +69,7 @@ class Participant:
 
             self.id = user_data['user_id']
             self.link = SITES[site]['site_url'] + '/users/{}/'.format(self.id)
-            self.last_checked = time()
+            self.last_checked = int(time())
             self.score = 0
 
         def update(self) -> bool:
@@ -140,6 +143,9 @@ class Marathon:
         self.sites.append(site)
         for participant in self.participants.values():
             participant.fetch_users(site)
+
+    def clear_sites(self):
+        self.sites.clear()
 
     def add_participant(self, username: str):
         p = Participant(username)
