@@ -6,6 +6,7 @@ import telegram as tg
 import telegram.ext as tge
 import telegram.ext.filters as tgf
 from telegram.parsemode import ParseMode
+from enum import Enum
 
 import marathon as sem
 from utils import *
@@ -52,15 +53,21 @@ class BotArgumentError(ValueError):
     pass
 
 
+class OngoingOperation(Enum):
+    START_MARATHON = 1
+
+
 class BotSession:
     sessions: Dict[int, 'BotSession'] = {}
     id: int
     marathon: sem.Marathon
+    operation: OngoingOperation
 
     def __init__(self, chat_id: int):
         BotSession.sessions[chat_id] = self
         self.id = chat_id
         self.marathon = None
+        self.operation = None
 
     @staticmethod
     @cmd_handler(pass_session=False)
@@ -76,6 +83,21 @@ class BotSession:
         BotSession(update.message.chat_id)
         with open('text/start.txt') as file:
             update.message.reply_text(text=file.read().strip())
+
+    @cmd_handler('yes')
+    @ongoing_operation_method
+    def yes(self, update):
+        if self.operation is OngoingOperation.START_MARATHON:
+            print('success')
+
+    @cmd_handler('no')
+    @ongoing_operation_method
+    def no(self, update):
+        pass
+
+    @cmd_handler('cancel')
+    def cancel(self, update):
+        pass
 
     @cmd_handler()
     def new_marathon(self, update: tg.Update):
@@ -129,7 +151,8 @@ class BotSession:
         # TODO: start marathon backend
         text = '\n\n'.join(("Starting the marathon with the following settings:",
                             self.settings_msg(),
-                            "Continue?\n/yes /no"))
+                            "Continue?\t/yes\t /no"))
+        self.operation = OngoingOperation.START_MARATHON
         update.message.reply_markdown(text=text)
 
 
