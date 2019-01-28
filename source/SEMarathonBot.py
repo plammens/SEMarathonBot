@@ -28,6 +28,7 @@ class BotArgumentError(ValueError):
 
 class OngoingOperation(Enum):
     START_MARATHON = "start marathon"
+    SHUTDOWN = "shutdown"
 
 
 """Method decorators"""
@@ -113,12 +114,20 @@ class BotSession:
         with open('text/start.txt') as file:
             update.message.reply_text(text=file.read().strip())
 
+    @cmd_handler()
+    def shutdown(self, update: tg.Update):
+        self.operation = OngoingOperation.SHUTDOWN
+        update.message.reply_text("Are you sure? /yes \t /no")
+
     @cmd_handler('yes')
     @ongoing_operation_method
     def yes(self, update: tg.Update):
         if self.operation is OngoingOperation.START_MARATHON:
             self.marathon.start(target=self.update_handler())
             update.message.reply_markdown(text="*_Alright, marathon has begun!_*")
+        elif self.operation is OngoingOperation.SHUTDOWN:
+            del BotSession.sessions[self.id]
+            update.message.reply_text(text="I'm now sleeping. Reactivate with /start.")
 
     @cmd_handler('no')
     @ongoing_operation_method
@@ -269,10 +278,15 @@ atexit.register(notify_shutdown)
 
 print("Done.")
 
-if __name__ == '__main__':
+
+def start_bot():
     import logging
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.INFO)
 
     UPDATER.start_polling()
+
+
+if __name__ == '__main__':
+    start_bot()

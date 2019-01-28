@@ -1,6 +1,6 @@
 Hi, I'm the Stack Exchange Marathon Bot. A Stack Exchange marathon is a simple game: try to get as much reputation as you can in a given time frame. My purpose as bot is to track reputation changes of participants among a selected set of SE sites. Type /start to start listening for commands.
 
-Getting started:
+General commands:
  - /info -- Show this message
  - /start -- Start listening for commands
 
