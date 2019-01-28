@@ -15,20 +15,3 @@ class reply_to_message(telegram.ext.filters.BaseFilter):
         return message.reply_to_message.message_id == self.message_id
 
 
-def marathon_method(method: callable) -> callable:
-    def decorated_method(session, *args, **kwargs):
-        if not session.marathon_created(): return
-        method(session, *args, **kwargs)
-
-    decorated_method.__name__ = method.__name__
-    return decorated_method
-
-
-def ongoing_operation_method(method: callable) -> callable:
-    def decorated_method(session, *args, **kwargs):
-        if not session.operation: return
-        method(session, *args, **kwargs)
-        session.operation = None
-
-    decorated_method.__name__ = method.__name__
-    return decorated_method

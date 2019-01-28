@@ -18,6 +18,18 @@ with open('token.txt') as token_file:
 UPDATER = tge.Updater(token=TOKEN)
 BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
 
+"""Helper classes"""
+
+class BotArgumentError(ValueError):
+    pass
+
+
+class OngoingOperation(Enum):
+    START_MARATHON = 1
+
+
+"""Method decorators"""
+
 
 def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = False,
                 **cmd_handler_kwargs) -> callable:
@@ -33,9 +45,9 @@ def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = 
             session = BotSession.sessions.get(chat_id, None)
             if pass_session and session is None: return
             effective_args = {
-                (True, True): (session, bot, update, *args),
-                (True, False): (session, update, *args),
-                (False, True): (bot, update, *args),
+                (True, True):   (session, bot, update, *args),
+                (True, False):  (session, update, *args),
+                (False, True):  (bot, update, *args),
                 (False, False): (update, *args)
             }[pass_session, pass_bot]
 
@@ -49,13 +61,26 @@ def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = 
     return decorator
 
 
-class BotArgumentError(ValueError):
-    pass
+def marathon_method(method: callable) -> callable:
+    def decorated_method(session: BotSession, *args, **kwargs):
+        if not session.marathon_created(): return
+        method(session, *args, **kwargs)
+
+    decorated_method.__name__ = method.__name__
+    return decorated_method
 
 
-class OngoingOperation(Enum):
-    START_MARATHON = 1
+def ongoing_operation_method(method: callable) -> callable:
+    def decorated_method(session: BotSession, *args, **kwargs):
+        if not session.operation: return
+        method(session, *args, **kwargs)
+        session.operation = None
 
+    decorated_method.__name__ = method.__name__
+    return decorated_method
+
+
+"""Main class"""
 
 class BotSession:
     sessions: Dict[int, 'BotSession'] = {}
