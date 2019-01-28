@@ -25,10 +25,11 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
         """Actual decorator"""
 
         def decorated(bot, update, *args, **kwargs):
-            debug_print("/{} served".format(callback.__name__))
+            debug_print("/{} reached".format(callback.__name__))
 
-            session = BotSession.sessions.get(update.message.chat_id, None)
-            if pass_session and session is None: return
+            chat_id = update.message.chat_id
+            session = BotSession.sessions.get(chat_id, None)
+            # if pass_session and session is None: return
             effective_args = {
                 (True, True): (session, bot, update, *args),
                 (True, False): (session, update, *args),
@@ -36,6 +37,7 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
                 (False, False): (update, *args)
             }[pass_session, pass_bot]
 
+            debug_print("/{} served".format(callback.__name__))
             return callback(*effective_args, **kwargs)
 
         handler = tge.CommandHandler(callback.__name__, decorated, **cmd_handler_kwargs)
