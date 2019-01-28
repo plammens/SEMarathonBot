@@ -239,18 +239,18 @@ class BotSession:
 
     @cmd_handler()
     @marathon_method
+    def status(self, update: tg.Update):
+        update.message.reply_markdown(text=self._status_text())
+
+    @cmd_handler()
+    @marathon_method
     def leaderboard(self, update: tg.Update):
         update.message.reply_markdown(text=self._leaderboard_text())
 
 
     @job_callback()
     def send_status_update(self):
-        now = datetime.datetime.now()
-        elapsed = now - self.marathon.start_time
-        remaining = self.marathon.end_time - now
-        with open('text/running_status.md') as text:
-            header = text.read().strip().format(elapsed, remaining)
-        text = '\n\n'.join((header, self._leaderboard_text()))
+        text = '\n\n'.join((self._status_text(), self._leaderboard_text()))
         BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
 
@@ -295,6 +295,16 @@ class BotSession:
 
         return '\n'.join(lines())
 
+    def _status_text(self):
+        if self.marathon.is_running:
+            now = datetime.datetime.now()
+            elapsed = now - self.marathon.start_time
+            remaining = self.marathon.end_time - now
+            with open('text/running_status.md') as text:
+                return text.read().strip().format(elapsed, remaining)
+        else:
+            return "Marathon is not running"
+
     @coroutine
     def _marathon_update_handler(self):
         while True:
@@ -324,6 +334,7 @@ class BotSession:
             DISPATCHER.add_handler(handler)
 
     def _shutdown(self):
+        self.marathon.destroy()
         del BotSession.sessions[self.id]
         BOT.send_message(chat_id=self.id, text="I'm now sleeping. Reactivate with /start.")
 

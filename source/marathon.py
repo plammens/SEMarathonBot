@@ -157,6 +157,10 @@ class Marathon:
         else:
             return datetime.timedelta(minutes=1)
 
+    @property
+    def is_running(self):
+        return self.poll_thread is not None and not self.poll_thread.stopped
+
     def add_site(self, site: str):
         if site not in SITES: raise SiteNotFoundError(site)
         self.sites.append(site)
@@ -192,6 +196,6 @@ class Marathon:
         self.poll_thread.start()
 
     def destroy(self):
-        if self.poll_thread is not None:
+        if self.is_running:
             self.poll_thread.stop()
             self.poll_thread.join()
