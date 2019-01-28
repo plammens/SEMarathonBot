@@ -18,11 +18,13 @@ UPDATER = tge.Updater(token=TOKEN)
 BOT, DISPATCHER = UPDATER.bot, UPDATER.dispatcher
 
 
-def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_handler_kwargs) -> callable:
+def cmd_handler(cmd: str = None, *, pass_session: bool = True, pass_bot: bool = False,
+                **cmd_handler_kwargs) -> callable:
     """Returns specialized decorator for CommandHandler callback functions"""
-
     def decorator(callback: callable) -> tge.CommandHandler:
         """Actual decorator"""
+        nonlocal cmd
+        if cmd is None: cmd = callback.__name__
 
         def decorated(bot, update, *args, **kwargs):
             debug_print("/{} reached".format(callback.__name__))
@@ -40,7 +42,7 @@ def cmd_handler(*, pass_session: bool = True, pass_bot: bool = False, **cmd_hand
             debug_print("/{} served".format(callback.__name__))
             return callback(*effective_args, **kwargs)
 
-        handler = tge.CommandHandler(callback.__name__, decorated, **cmd_handler_kwargs)
+        handler = tge.CommandHandler(cmd, decorated, **cmd_handler_kwargs)
         DISPATCHER.add_handler(handler)
         return handler
 
