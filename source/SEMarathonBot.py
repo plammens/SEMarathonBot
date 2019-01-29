@@ -111,6 +111,7 @@ def marathon_method(method: callable) -> callable:
 
 def running_marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
+        if not session.check_marathon_created(): return
         if not session.check_marathon_running(): return
         method(session, *args, **kwargs)
 
