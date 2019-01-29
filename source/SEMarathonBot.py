@@ -208,8 +208,7 @@ class BotSession:
             except sem.MultipleUsersFoundError as err:
                 self._handle_error(err)
 
-        text = "Successfully set sites "
-        text += ', '.join("_{}_".format(sem.SITES[site]['name']) for site in self.marathon.sites)
+        text = '\n'.join(("Successfully set sites to:", self._sites_text()))
         update.message.reply_markdown(text=text)
 
     @cmd_handler(pass_args=True)
@@ -250,7 +249,7 @@ class BotSession:
                 self._handle_error(BotArgumentError("Expected one or two argument"))
 
             self.marathon.duration = datetime.timedelta(hours=hours, minutes=minutes)
-            update.message.reply_markdown("Set the duration to *{}* ( _hh:mm:ss_ )".format(self.marathon.duration))
+            update.message.reply_markdown("Set the duration to *{}* (_hh:mm:ss_ )".format(self.marathon.duration))
         except ValueError:
             self._handle_error(BotArgumentError("Invalid duration given"))
 
@@ -299,25 +298,53 @@ class BotSession:
 
     def check_marathon_running(self) -> bool:
         if not self.marathon.is_running:
-            BOT.send_message(chat_id=self, text="Only avalilable when marathon is running!")
+            BOT.send_message(chat_id=self.id, text="Only available while marathon is running!")
             return False
         return True
+
 
     def _settings_text(self) -> str:
         def lines():
             yield "Current settings for marathon:"
+            yield self._sites_text()
+            yield self._participants_text()
+            yield "*Duration*: {} (_hh:mm:ss_ )".format(self.marathon.duration)
 
-            yield "\n*Sites*:"
+        return '\n\n'.join(lines())
+
+    def _sites_text(self) -> str:
+        def lines():
+            yield "*Sites*:"
+            for site in self.marathon.sites:
+                yield "\t - _{}_".format(sem.SITES[site]['name'])
+
+        return '\n'.join(lines())
+
+    def _participants_text(self) -> str:
+        def lines():
+            yield "*Sites*:"
             for site in self.marathon.sites:
                 yield "\t - {}".format(sem.SITES[site]['name'])
 
-            yield "\n*Participants*:"
-            for participant in self.marathon.participants.values():
-                yield "\t - {}".format(participant.name)
+        return '\n'.join(lines())
 
-            yield "\n*Duration*: {} ( _hh:mm:ss_ )".format(self.marathon.duration)
+    def _leaderboard_text(self) -> str:
+        def lines():
+            yield "LEADERBOARD\n"
+            participants = self.marathon.participants.values()
+            for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
+                yield "{}. *{}* – {} points".format(i, p, p.score)
 
         return '\n'.join(lines())
+
+    def _status_text(self) -> str:
+        if self.marathon.is_running:
+            elapsed, remaining = self.marathon.elapsed_remaining()
+            with open('text/running_status.md') as text:
+                return text.read().strip().format(elapsed, remaining)
+        else:
+            return "Marathon is not running"
+
 
     def _start_marathon(self):
         self.marathon.start(target=self._marathon_update_handler())
@@ -338,23 +365,6 @@ class BotSession:
                                 callback=self.countdown,
                                 interval=datetime.timedelta(seconds=1),
                                 first=self.marathon.end_time - datetime.timedelta(seconds=5))
-
-    def _leaderboard_text(self) -> str:
-        def lines():
-            yield "LEADERBOARD\n"
-            participants = self.marathon.participants.values()
-            for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                yield "{}. *{}* – {} points".format(i, p, p.score)
-
-        return '\n'.join(lines())
-
-    def _status_text(self) -> str:
-        if self.marathon.is_running:
-            elapsed, remaining = self.marathon.elapsed_remaining()
-            with open('text/running_status.md') as text:
-                return text.read().strip().format(elapsed, remaining)
-        else:
-            return "Marathon is not running"
 
     @coroutine
     def _marathon_update_handler(self):
@@ -392,7 +402,17 @@ class BotSession:
         BOT.send_message(chat_id=self.id, text="I'm now sleeping. Reactivate with /start.")
 
 
-def notify_shutdown():
+def start_bot():
+    import logging
+
+    # noinspection SpellCheckingInspection
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        level=logging.INFO)
+
+    UPDATER.start_polling()
+
+
+def shutdown_bot():
     UPDATER.stop()
     for chat in BotSession.sessions:
         BOT.send_message(chat_id=chat,
@@ -400,19 +420,10 @@ def notify_shutdown():
                          parse_mode=ParseMode.MARKDOWN)
 
 
-atexit.register(notify_shutdown)
+atexit.register(shutdown_bot)
 
 print("Done.")
 
-
-def start_bot():
-    import logging
-
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        level=logging.INFO)
-
-    UPDATER.start_polling()
-
-
 if __name__ == '__main__':
     start_bot()
+    UPDATER.idle()
