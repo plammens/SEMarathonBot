@@ -254,6 +254,28 @@ class BotSession:
         except ValueError:
             self._handle_error(BotArgumentError("Invalid duration given"))
 
+    @cmd_handler(pass_args=True)
+    def schedule(self, update: tg.Update, args: List[str]):
+        try:
+            day, time_of_day = datetime.date.today(), datetime.time()
+            if len(args) == 1:
+                hour_num, minute_num = (int(num) for num in args[1].split(':'))
+                time_of_day = datetime.time(hour=hour_num, minute=minute_num)
+            elif len(args) == 2:
+                day_num, month_num, year_num = (int(num) for num in args[0].split('/'))
+                day = datetime.date(year=year_num, month=month_num, day=day_num)
+                hour_num, minute_num = (int(num) for num in args[1].split(':'))
+                time_of_day = datetime.time(hour=hour_num, minute=minute_num)
+            else:
+                self._handle_error(BotArgumentError("Expected one or two arguments"))
+
+            date_time = datetime.datetime.combine(day, time_of_day)
+            JOB_QUEUE.run_once(callback=self.start_scheduled_marathon,
+                               when=date_time, context=self.id)
+            update.message.reply_markdown("Scheduled marathon start for *{}*".format(date_time))
+        except ValueError:
+            self._handle_error(BotArgumentError("Invalid date/time given"))
+
     @cmd_handler()
     def start_marathon(self, update: tg.Update):
         text = '\n\n'.join(("Starting the marathon with the following settings:",
@@ -268,7 +290,7 @@ class BotSession:
         update.message.reply_markdown(text=self._status_text())
 
     @cmd_handler()
-    @running_marathon_method
+    @marathon_method
     def leaderboard(self, update: tg.Update):
         update.message.reply_markdown(text=self._leaderboard_text())
 
@@ -288,6 +310,10 @@ class BotSession:
         else:
             text = "_*{} seconds remaining!*_".format(seconds)
         BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
+
+    @job_callback()
+    def start_scheduled_marathon(self):
+        self._start_marathon()
 
 
     def check_marathon_created(self) -> bool:
@@ -353,19 +379,23 @@ class BotSession:
                          parse_mode=ParseMode.MARKDOWN)
         JOB_QUEUE.run_repeating(name='periodic updates',
                                 callback=self.send_status_update,
-                                interval=self.marathon.refresh_interval)
+                                interval=self.marathon.refresh_interval,
+                                context=self.id)
         JOB_QUEUE.run_repeating(name='minute countdown',
                                 callback=self.countdown,
                                 interval=datetime.timedelta(minutes=1),
-                                first=self.marathon.end_time - datetime.timedelta(minutes=5))
+                                first=self.marathon.end_time - datetime.timedelta(minutes=5),
+                                context=self.id)
         JOB_QUEUE.run_repeating(name='15 seconds countdown',
                                 callback=self.countdown,
                                 interval=datetime.timedelta(seconds=45),
-                                first=self.marathon.end_time - datetime.timedelta(seconds=45))
+                                first=self.marathon.end_time - datetime.timedelta(seconds=45),
+                                context=self.id)
         JOB_QUEUE.run_repeating(name='5 seconds countdown',
                                 callback=self.countdown,
                                 interval=datetime.timedelta(seconds=1),
-                                first=self.marathon.end_time - datetime.timedelta(seconds=5))
+                                first=self.marathon.end_time - datetime.timedelta(seconds=5),
+                                context=self.id)
 
     @coroutine
     def _marathon_update_handler(self):
