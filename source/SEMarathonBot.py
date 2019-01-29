@@ -11,6 +11,7 @@ import telegram.ext.filters as tgf
 from telegram.parsemode import ParseMode
 
 import marathon as sem
+from jq_pickle import *
 from utils import *
 
 
@@ -409,6 +410,12 @@ def start_bot():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.INFO)
 
+    JOB_QUEUE.run_repeating(callback=save_jobs_job, interval=datetime.timedelta(minutes=1))
+    try:
+        load_jobs(JOB_QUEUE)
+    except FileNotFoundError:
+        pass
+
     UPDATER.start_polling()
 
 
@@ -418,6 +425,7 @@ def shutdown_bot():
         BOT.send_message(chat_id=chat,
                          text="*SERVER SHUTDOWN* – Going to sleep with the fishes...",
                          parse_mode=ParseMode.MARKDOWN)
+    save_jobs(JOB_QUEUE)
 
 
 atexit.register(shutdown_bot)
@@ -427,3 +435,4 @@ print("Done.")
 if __name__ == '__main__':
     start_bot()
     UPDATER.idle()
+    shutdown_bot()
