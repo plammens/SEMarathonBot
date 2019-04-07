@@ -142,8 +142,6 @@ class BotSession:
     def __init__(self, chat_id: int):
         BotSession.sessions[chat_id] = self
         self.id = chat_id
-        self.marathon = None
-        self.operation = None
 
     @staticmethod
     @cmd_handler(pass_session=False)
@@ -304,7 +302,7 @@ class BotSession:
     def countdown(self):
         _, remaining = self.marathon.elapsed_remaining()
         seconds = int(remaining.total_seconds())
-        minutes = seconds//60
+        minutes = seconds // 60
         if minutes >= 1:
             text = "*{} minutes remaining!*".format(minutes)
         else:
