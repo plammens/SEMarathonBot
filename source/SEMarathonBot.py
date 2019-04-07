@@ -219,15 +219,17 @@ class BotSession:
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
                 user = p.user(site)
-                yield " - _{}_ : [user ID {}]({})".format(sem.SITES[site]['name'], user.id, user.link)
+                yield " - _{}_ : [user ID {}]({})".format(sem.SITES[site]['name'], user.id,
+                                                          user.link)
             yield ""
             yield "Please verify the IDs are correct."
 
         for username in args:
             try:
                 self.marathon.add_participant(username)
-                update.message.reply_markdown(text='\n'.join(msg_lines(self.marathon.participants[username])),
-                                              disable_web_page_preview=True)
+                update.message.reply_markdown(
+                    text='\n'.join(msg_lines(self.marathon.participants[username])),
+                    disable_web_page_preview=True)
             except sem.UserNotFoundError as err:
                 self._handle_error(err)
             except sem.MultipleUsersFoundError as err:
@@ -248,7 +250,8 @@ class BotSession:
                 self._handle_error(BotArgumentError("Expected one or two argument"))
 
             self.marathon.duration = datetime.timedelta(hours=hours, minutes=minutes)
-            update.message.reply_markdown("Set the duration to *{}* (_hh:mm:ss_ )".format(self.marathon.duration))
+            update.message.reply_markdown(
+                "Set the duration to *{}* (_hh:mm:ss_ )".format(self.marathon.duration))
         except ValueError:
             self._handle_error(BotArgumentError("Invalid duration given"))
 
@@ -411,7 +414,8 @@ class BotSession:
     def _handle_error(self, error: Exception, additional_msg: str = "", *,
                       require_action: bool = False, callback: callable = None):
         error_text = '\n\n'.join(("*ERROR*: {}".format(error), additional_msg))
-        error_message = BOT.send_message(chat_id=self.id, text=error_text, parse_mode=ParseMode.MARKDOWN)
+        error_message = BOT.send_message(chat_id=self.id, text=error_text,
+                                         parse_mode=ParseMode.MARKDOWN)
 
         if require_action:
             filters = tgf.Filters.chat(self.id) & reply_to_message(error_message)
