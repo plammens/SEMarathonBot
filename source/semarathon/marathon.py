@@ -7,7 +7,7 @@ import stackapi
 
 from semarathon.utils import StoppableThread
 
-with open('db/SE-Sites.json') as db:
+with open('data/SE-Sites.json') as db:
     SITES = json.load(db)
 DEFAULT_SITES = ('stackoverflow', 'math', 'tex')
 APIS = {name: stackapi.StackAPI(name) for name in DEFAULT_SITES}
