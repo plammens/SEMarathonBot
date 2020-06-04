@@ -1,18 +1,25 @@
-print("Initializing server... ", end='')
+import logging
+
+# noinspection SpellCheckingInspection
+logging.basicConfig(format='%(asctime)s - %(name)s:%(levelname)s - %(message)s',
+                    level=logging.INFO)
+
+if __name__ == '__main__':
+    logging.info("Initializing module")
 
 import atexit
 import datetime
 from enum import Enum
-from typing import List, Dict
+from typing import Dict, List
 
 import telegram as tg
 import telegram.ext as tge
 import telegram.ext.filters as tgf
 from telegram.parsemode import ParseMode
 
-import marathon as sem
-from jq_pickle import *
-from utils import *
+from semarathon import marathon as mth
+from semarathon.persistence import *
+from semarathon.utils import *
 
 
 with open('token.txt') as token_file:
@@ -136,7 +143,7 @@ def ongoing_operation_method(method: callable) -> callable:
 class BotSession:
     sessions: Dict[int, 'BotSession'] = {}
     id: int
-    marathon: sem.Marathon
+    marathon: mth.Marathon
     operation: OngoingOperation
 
     def __init__(self, chat_id: int):
@@ -183,7 +190,7 @@ class BotSession:
     @cmd_handler()
     def new_marathon(self, update: tg.Update):
         """Create new marathon"""
-        self.marathon = sem.Marathon()
+        self.marathon = mth.Marathon()
         with open('text/new_marathon.txt') as text:
             update.message.reply_markdown(text=text.read().strip())
 
@@ -200,11 +207,11 @@ class BotSession:
         for site in args:
             try:
                 self.marathon.add_site(site)
-            except sem.SiteNotFoundError as err:
+            except mth.SiteNotFoundError as err:
                 self._handle_error(err)
-            except sem.UserNotFoundError as err:
+            except mth.UserNotFoundError as err:
                 self._handle_error(err)
-            except sem.MultipleUsersFoundError as err:
+            except mth.MultipleUsersFoundError as err:
                 self._handle_error(err)
 
         text = '\n'.join(("Successfully set sites to:", self._sites_text()))
@@ -215,11 +222,11 @@ class BotSession:
     def add_participants(self, update: tg.Update, args: List[str]):
         """Add participants to marathon"""
 
-        def msg_lines(p: sem.Participant):
+        def msg_lines(p: mth.Participant):
             yield "Added *{}* to marathon:".format(p.name)
             for site in self.marathon.sites:
                 user = p.user(site)
-                yield " - _{}_ : [user ID {}]({})".format(sem.SITES[site]['name'], user.id,
+                yield " - _{}_ : [user ID {}]({})".format(mth.SITES[site]['name'], user.id,
                                                           user.link)
             yield ""
             yield "Please verify the IDs are correct."
@@ -230,9 +237,9 @@ class BotSession:
                 update.message.reply_markdown(
                     text='\n'.join(msg_lines(self.marathon.participants[username])),
                     disable_web_page_preview=True)
-            except sem.UserNotFoundError as err:
+            except mth.UserNotFoundError as err:
                 self._handle_error(err)
-            except sem.MultipleUsersFoundError as err:
+            except mth.MultipleUsersFoundError as err:
                 self._handle_error(err)
 
     # TODO: remove participant
@@ -295,6 +302,7 @@ class BotSession:
     def leaderboard(self, update: tg.Update):
         update.message.reply_markdown(text=self._leaderboard_text())
 
+    # ----- job callbacks -----
 
     @job_callback()
     def send_status_update(self):
@@ -305,7 +313,7 @@ class BotSession:
     def countdown(self):
         _, remaining = self.marathon.elapsed_remaining()
         seconds = int(remaining.total_seconds())
-        minutes = seconds // 60
+        minutes = seconds//60
         if minutes >= 1:
             text = "*{} minutes remaining!*".format(minutes)
         else:
@@ -316,6 +324,7 @@ class BotSession:
     def start_scheduled_marathon(self):
         self._start_marathon()
 
+    # ----- utility methods -----
 
     def check_marathon_created(self) -> bool:
         if not self.marathon:
@@ -330,7 +339,6 @@ class BotSession:
             return False
         return True
 
-
     def _settings_text(self) -> str:
         def lines():
             yield "Current settings for marathon:"
@@ -344,7 +352,7 @@ class BotSession:
         def lines():
             yield "*Sites*:"
             for site in self.marathon.sites:
-                yield "\t - _{}_".format(sem.SITES[site]['name'])
+                yield "\t - _{}_".format(mth.SITES[site]['name'])
 
         return '\n'.join(lines())
 
@@ -352,7 +360,7 @@ class BotSession:
         def lines():
             yield "*Sites*:"
             for site in self.marathon.sites:
-                yield "\t - {}".format(sem.SITES[site]['name'])
+                yield "\t - {}".format(mth.SITES[site]['name'])
 
         return '\n'.join(lines())
 
@@ -372,7 +380,6 @@ class BotSession:
                 return text.read().strip().format(elapsed, remaining)
         else:
             return "Marathon is not running"
-
 
     def _start_marathon(self):
         self.marathon.start(target=self._marathon_update_handler())
@@ -401,11 +408,11 @@ class BotSession:
     @coroutine
     def _marathon_update_handler(self):
         while True:
-            update: sem.Update = (yield)
+            update: mth.Update = (yield)
 
             def per_site():
                 for site, increment in update.per_site.items():
-                    yield " _{}_  ({:+})".format(sem.SITES[site]['name'], increment)
+                    yield " _{}_  ({:+})".format(mth.SITES[site]['name'], increment)
 
             text = "*{}* just gained *{:+}* reputation on".format(update.participant, update.total)
             text += ', '.join(per_site())
@@ -418,7 +425,7 @@ class BotSession:
                                          parse_mode=ParseMode.MARKDOWN)
 
         if require_action:
-            filters = tgf.Filters.chat(self.id) & reply_to_message(error_message)
+            filters = tgf.Filters.chat(self.id) & ReplyToMessage(error_message)
 
             def modified_callback(bot, update):
                 callback(bot, update)
@@ -436,12 +443,7 @@ class BotSession:
 
 
 def start_bot():
-    import logging
-
-    # noinspection SpellCheckingInspection
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        level=logging.INFO)
-
+    logging.info("Starting bot")
     JOB_QUEUE.run_repeating(callback=save_jobs_job, interval=datetime.timedelta(minutes=1))
     try:
         load_jobs(JOB_QUEUE)
@@ -452,6 +454,7 @@ def start_bot():
 
 
 def shutdown_bot():
+    logging.info("Shutting down bot")
     UPDATER.stop()
     for chat in BotSession.sessions:
         BOT.send_message(chat_id=chat,
@@ -461,8 +464,6 @@ def shutdown_bot():
 
 
 atexit.register(shutdown_bot)
-
-print("Done.")
 
 if __name__ == '__main__':
     start_bot()

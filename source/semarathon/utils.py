@@ -7,7 +7,7 @@ def debug_print(msg: str):
     print('\t'.join(('[SEMB]', msg)))
 
 
-class reply_to_message(telegram.ext.filters.BaseFilter):
+class ReplyToMessage(telegram.ext.filters.BaseFilter):
     message_id: int
 
     def __init__(self, message: telegram.Message):

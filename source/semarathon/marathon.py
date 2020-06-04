@@ -5,7 +5,7 @@ from typing import List, Dict
 
 import stackapi
 
-from utils import StoppableThread
+from semarathon.utils import StoppableThread
 
 with open('db/SE-Sites.json') as db:
     SITES = json.load(db)
