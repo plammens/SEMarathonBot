@@ -16,7 +16,6 @@ from typing import Dict, Callable, Optional, Union
 
 import telegram as tg
 import telegram.ext as tge
-import telegram.ext.filters as tgf
 from telegram.parsemode import ParseMode
 
 from semarathon import marathon as mth
@@ -34,12 +33,17 @@ USAGE_ERROR_TXT = load_text('usage-error')
 INTERNAL_ERROR_TXT = load_text('internal-error')
 INFO_TXT = load_text('info')
 START_TXT = load_text('start')
+MARATHON_NOT_CREATED_TXT = load_text('marathon_not_created')
 
 
 # --------------------------------------- Helpers  ---------------------------------------
 
 class UsageError(Exception):
-    pass
+    help_txt: str
+
+    def __init__(self, *args, help_txt: str = None):
+        super(UsageError, self).__init__(*args)
+        self.help_txt = help_txt or "See /info for usage info"
 
 
 class ArgValueError(UsageError, ValueError):
@@ -59,8 +63,8 @@ def get_session(context: tge.CallbackContext):
     try:
         return context.chat_data['session']
     except KeyError:
-        raise UsageError(
-            "Session not initialized. You must use /start before using other commands")
+        raise UsageError("Session not initialized",
+                         help_txt="You must use /start before using other commands")
 
 
 # --------------------------------------- Decorators  ---------------------------------------
@@ -113,11 +117,11 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
                 callback(*args)
 
                 logging.info(f'served {command_info}')
-            except (UsageError, ValueError) as e:
+            except (UsageError, ValueError, mth.SEMarathonError) as e:
                 text = '\n\n'.join([USAGE_ERROR_TXT, format_exception_md(e),
-                                    'See /help for usage info.'])
+                                    getattr(e, 'help_txt', "See /info for usage info")])
                 markdown_safe_reply(update.message, text)
-                logging.info(f'served {command_info} (usage/algorithm error)')
+                logging.info(f'served {command_info} (with usage/algorithm error)')
             except Exception as e:
                 text = '\n\n'.join([INTERNAL_ERROR_TXT, format_exception_md(e)])
                 markdown_safe_reply(update.message, text)
@@ -138,10 +142,13 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
     def decorator(callback: callable) -> callable:
         """Actual decorator"""
 
-        def decorated(bot, job, *args, **kwargs):
+        def decorated(bot: tg.Bot, job: tge.Job, *args, **kwargs):
             chat_id = job.context
             session = BotSession.SESSIONS.get(chat_id, None)
-            if pass_session and session is None: return
+            if pass_session and session is None:
+                logging.debug(f"Skipping job {callback.__name__}: "
+                              f"no active session for {chat_id} found")
+                return
 
             effective_args = []
             if pass_session: effective_args.append(session)
@@ -157,7 +164,7 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
 
 def marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session.check_marathon_created(): return
+        session.check_marathon_created()
         method(session, *args, **kwargs)
 
     decorated_method.__name__ = method.__name__
@@ -166,8 +173,8 @@ def marathon_method(method: callable) -> callable:
 
 def running_marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session.check_marathon_created(): return
-        if not session.check_marathon_running(): return
+        session.check_marathon_created()
+        session.check_marathon_running()
         method(session, *args, **kwargs)
 
     decorated_method.__name__ = method.__name__
@@ -176,7 +183,7 @@ def running_marathon_method(method: callable) -> callable:
 
 def ongoing_operation_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session.operation: return  # TODO: raise exception
+        session.check_operation_ongoing()
         method(session, *args, **kwargs)
         session.operation = None
 
@@ -256,15 +263,9 @@ class BotSession:
     def set_sites(self, update: tg.Update, context: tge.CallbackContext):
         self.marathon.clear_sites()
         for site in context.args:
-            try:
-                self.marathon.add_site(site)
-            except mth.SiteNotFoundError as err:
-                self._handle_error(err)
-            except mth.UserNotFoundError as err:
-                self._handle_error(err)
-            except mth.MultipleUsersFoundError as err:
-                self._handle_error(err)
+            self.marathon.add_site(site)
 
+        # TODO: replace joins with f-strings
         text = '\n'.join(("Successfully set sites to:", self._sites_text()))
         update.message.reply_markdown(text=text)
 
@@ -282,16 +283,11 @@ class BotSession:
             yield ""
             yield "Please verify the IDs are correct."
 
-        for username in args:
-            try:
-                self.marathon.add_participant(username)
-                update.message.reply_markdown(
-                    text='\n'.join(msg_lines(self.marathon.participants[username])),
-                    disable_web_page_preview=True)
-            except mth.UserNotFoundError as err:
-                self._handle_error(err)
-            except mth.MultipleUsersFoundError as err:
-                self._handle_error(err)
+        for username in context.args:
+            self.marathon.add_participant(username)
+            update.message.reply_markdown(
+                text='\n'.join(msg_lines(self.marathon.participants[username])),
+                disable_web_page_preview=True)
 
     # TODO: remove participant
 
@@ -306,14 +302,13 @@ class BotSession:
             elif len(args) == 2:
                 hours, minutes = int(args[0]), int(args[1])
             else:
-                # TODO: raise exceptions directly
-                self._handle_error(ArgCountError("Expected one or two argument"))
+                raise ArgCountError("Expected one or two argument")
 
             self.marathon.duration = datetime.timedelta(hours=hours, minutes=minutes)
             update.message.reply_markdown(
                 "Set the duration to *{}* (_hh:mm:ss_ )".format(self.marathon.duration))
         except ValueError:
-            self._handle_error(ArgValueError("Invalid duration given"))
+            raise ArgValueError("Invalid duration given")
 
     @cmdhandler(pass_context=True)
     def schedule(self, update: tg.Update, context: tge.CallbackContext):
@@ -329,14 +324,14 @@ class BotSession:
                 hour_num, minute_num = (int(num) for num in args[1].split(':'))
                 time_of_day = datetime.time(hour=hour_num, minute=minute_num)
             else:
-                self._handle_error(ArgCountError("Expected one or two arguments"))
+                raise ArgCountError("Expected one or two arguments")
 
             date_time = datetime.datetime.combine(day, time_of_day)
             JOB_QUEUE.run_once(callback=self.start_scheduled_marathon,
                                when=date_time, context=self.id)
             update.message.reply_markdown("Scheduled marathon start for *{}*".format(date_time))
         except ValueError:
-            self._handle_error(ArgValueError("Invalid date/time given"))
+            raise ArgValueError("Invalid date/time given")
 
     @cmdhandler()
     def start_marathon(self, update: tg.Update):
@@ -390,18 +385,17 @@ class BotSession:
 
     # ---------------------------------- Utility methods  ----------------------------------
 
-    def check_marathon_created(self) -> bool:
+    def check_marathon_created(self) -> None:
         if not self.marathon:
-            with open('text/marathon_not_created.txt') as text:
-                BOT.send_message(chat_id=self.id, text=text.read().strip())
-            return False
-        return True
+            raise UsageError("Marathon not yet created", help_txt=MARATHON_NOT_CREATED_TXT)
 
-    def check_marathon_running(self) -> bool:
+    def check_marathon_running(self) -> None:
         if not self.marathon.is_running:
-            BOT.send_message(chat_id=self.id, text="Only available while marathon is running!")
-            return False
-        return True
+            raise UsageError("Only available while marathon is running")
+
+    def check_operation_ongoing(self) -> None:
+        if self.operation is None:
+            raise UsageError("No ongoing operation")
 
     def _settings_text(self) -> str:
         def lines():
@@ -481,23 +475,6 @@ class BotSession:
             text = "*{}* just gained *{:+}* reputation on".format(update.participant, update.total)
             text += ', '.join(per_site())
             BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
-
-    def _handle_error(self, error: Exception, additional_msg: str = "", *,
-                      require_action: bool = False, callback: callable = None):
-        # TODO: use markdown safe reply
-        error_text = '\n\n'.join(("*ERROR*: {}".format(error), additional_msg))
-        error_message = BOT.send_message(chat_id=self.id, text=error_text,
-                                         parse_mode=ParseMode.MARKDOWN)
-
-        if require_action:
-            filters = tgf.Filters.chat(self.id) & ReplyToMessage(error_message)
-
-            def modified_callback(bot, update):
-                callback(bot, update)
-                DISPATCHER.remove_handler(handler)
-
-            handler = tge.MessageHandler(filters=filters, callback=modified_callback)
-            DISPATCHER.add_handler(handler)
 
     def _shutdown(self):
         self.marathon.destroy()

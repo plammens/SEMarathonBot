@@ -1,7 +1,7 @@
 import datetime
 import json
 import time
-from typing import List, Dict
+from typing import Dict, List
 
 import stackapi
 
@@ -19,7 +19,11 @@ def get_api(site: str):
     return APIS[site]
 
 
-class UserError(LookupError):
+class SEMarathonError(Exception):
+    pass
+
+
+class UserError(SEMarathonError, LookupError):
     def __init__(self, user: 'Participant.User'):
         self.user = user
 
@@ -40,7 +44,7 @@ class MultipleUsersFoundError(UserError):
                                                                       SITES[self.user.site]['name'])
 
 
-class SiteError(LookupError):
+class SiteError(SEMarathonError, LookupError):
     def __init__(self, site):
         self.site = site
 
