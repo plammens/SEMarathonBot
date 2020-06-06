@@ -1,5 +1,7 @@
 import logging
 
+# TODO: extract script for running bot
+
 # noinspection SpellCheckingInspection
 logging.basicConfig(format='%(asctime)s - %(name)s:%(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -10,7 +12,7 @@ if __name__ == '__main__':
 import atexit
 import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, Callable, Optional, Union
 
 import telegram as tg
 import telegram.ext as tge
@@ -22,16 +24,29 @@ from semarathon.persistence import *
 from semarathon.utils import *
 
 
-with open('token.txt') as token_file:
-    TOKEN: str = token_file.read().strip()
-
-UPDATER = tge.Updater(token=TOKEN)
+# Construct bot objects:
+TOKEN = load_text('token')
+UPDATER = tge.Updater(token=TOKEN, use_context=True)
 BOT, DISPATCHER, JOB_QUEUE = UPDATER.bot, UPDATER.dispatcher, UPDATER.job_queue
 
-"""Helper classes"""
+# Load text files:
+USAGE_ERROR_TXT = load_text('usage-error')
+INTERNAL_ERROR_TXT = load_text('internal-error')
+INFO_TXT = load_text('info')
+START_TXT = load_text('start')
 
 
-class BotArgumentError(ValueError):
+# --------------------------------------- Helpers  ---------------------------------------
+
+class UsageError(Exception):
+    pass
+
+
+class ArgValueError(UsageError, ValueError):
+    pass
+
+
+class ArgCountError(UsageError):
     pass
 
 
@@ -40,36 +55,79 @@ class OngoingOperation(Enum):
     SHUTDOWN = "shutdown"
 
 
-"""Method decorators"""
+def get_session(context: tge.CallbackContext):
+    try:
+        return context.chat_data['session']
+    except KeyError:
+        raise UsageError(
+            "Session not initialized. You must use /start before using other commands")
 
 
-def cmd_handler(cmd: str = None, *,
-                pass_session: bool = True, pass_bot: bool = False, pass_update: bool = True,
-                **cmd_handler_kwargs) -> callable:
-    """Returns specialized decorator for CommandHandler callback functions"""
+# --------------------------------------- Decorators  ---------------------------------------
 
-    def decorator(callback: callable) -> tge.CommandHandler:
-        """Actual decorator"""
-        nonlocal cmd
-        if cmd is None: cmd = callback.__name__
+# type alias for command handler callbacks
+CommandCallbackType = Callable[[tg.Update, tge.CallbackContext], None]
+CommandMethodCallbackType = Callable[['BotSession', tg.Update], None]
 
-        def decorated(bot, update, *args, **kwargs):
-            chat_id = update.message.chat_id
-            session = BotSession.sessions.get(chat_id, None)
-            if pass_session and session is None: return
 
-            effective_args = []
-            if pass_session: effective_args.append(session)
-            if pass_bot: effective_args.append(bot)
-            if pass_update: effective_args.append(update)
-            effective_args.extend(args)
+def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = True,
+               pass_context: bool = None, **handler_kwargs) \
+        -> Callable[[Union[CommandCallbackType, CommandMethodCallbackType]], CommandCallbackType]:
+    """
+    Decorator factory for command handlers. The returned decorator adds
+    the decorated function as a command handler for the command ``command``
+    to the global DISPATCHER. If ``command`` is not specified it defaults to
+    the decorated function's name.
 
-            debug_print("/{} served".format(callback.__name__))
-            return callback(*effective_args, **kwargs)
+    The callback is also decorated with an exception handler before
+    constructing the command handler.
 
-        handler = tge.CommandHandler(cmd, decorated, **cmd_handler_kwargs)
+    :param command: name of bot command to add a handler for
+    :param method: whether the callback is in the form of a BotSession method
+    :param pass_update: whether to pass the tg.Update to the callback
+    :param pass_context: whether to pass the tge.CallbackContext to the callback
+                         (defaults to ``not method``)
+    :param handler_kwargs: additional keyword arguments for the
+                           creation of the command handler (these will be passed
+                           to ``telegram.ext.dispatcher.add_handler``)
+    :return: the decorated function, unchanged
+    """
+
+    pass_context = pass_context if pass_context is not None else not method
+
+    # Actual decorator
+    def decorator(callback: CommandCallbackType) -> CommandCallbackType:
+        command_ = command or callback.__name__
+
+        def decorated(update: tg.Update, context: tge.CallbackContext):
+            command_info = f'/{command_}@{update.effective_chat.id}'
+            logging.info(f'reached {command_info}')
+            try:
+                # Build arguments list:
+                args = []
+                if method: args.append(get_session(context))
+                if pass_update: args.append(update)
+                if pass_context: args.append(context)
+
+                # Actual call:
+                callback(*args)
+
+                logging.info(f'served {command_info}')
+            except (UsageError, ValueError) as e:
+                text = '\n\n'.join([USAGE_ERROR_TXT, format_exception_md(e),
+                                    'See /help for usage info.'])
+                markdown_safe_reply(update.message, text)
+                logging.info(f'served {command_info} (usage/algorithm error)')
+            except Exception as e:
+                text = '\n\n'.join([INTERNAL_ERROR_TXT, format_exception_md(e)])
+                markdown_safe_reply(update.message, text)
+                logging.error(f'{command_info}: unexpected exception', exc_info=e)
+            finally:
+                logging.debug(f'exiting {command_info}')
+
+        handler = tge.CommandHandler(command_, decorated, **handler_kwargs)
         DISPATCHER.add_handler(handler)
-        return callback
+        return decorated
 
     return decorator
 
@@ -82,7 +140,7 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
 
         def decorated(bot, job, *args, **kwargs):
             chat_id = job.context
-            session = BotSession.sessions.get(chat_id, None)
+            session = BotSession.SESSIONS.get(chat_id, None)
             if pass_session and session is None: return
 
             effective_args = []
@@ -96,17 +154,6 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
 
     return decorator
 
-
-# def check(callback: callable, callback_args: tuple = None, callback_kwargs: dict = None):
-#     def decorator(method: callable) -> callable:
-#         def decorated(*args, **kwargs):
-#             if not callback(*callback_args, **callback_kwargs): return
-#             method(*args, **kwargs)
-#
-#         decorated.__name__ = method.__name__
-#         return decorated
-#
-#     return decorator
 
 def marathon_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
@@ -129,7 +176,7 @@ def running_marathon_method(method: callable) -> callable:
 
 def ongoing_operation_method(method: callable) -> callable:
     def decorated_method(session: 'BotSession', *args, **kwargs):
-        if not session.operation: return
+        if not session.operation: return  # TODO: raise exception
         method(session, *args, **kwargs)
         session.operation = None
 
@@ -137,74 +184,78 @@ def ongoing_operation_method(method: callable) -> callable:
     return decorated_method
 
 
-"""Main class"""
-
+# --------------------------------------- BotSession  ---------------------------------------
 
 class BotSession:
-    sessions: Dict[int, 'BotSession'] = {}
     id: int
-    marathon: mth.Marathon
-    operation: OngoingOperation
+    marathon: Optional[mth.Marathon]
+    operation: Optional[OngoingOperation]
+
+    SESSIONS: Dict[int, 'BotSession'] = {}
 
     def __init__(self, chat_id: int):
-        BotSession.sessions[chat_id] = self
+        BotSession.SESSIONS[chat_id] = self
         self.id = chat_id
+        self.marathon = None
+        self.operation = None
+
+    # ---------------------------------- Command handlers  ----------------------------------
 
     @staticmethod
-    @cmd_handler(pass_session=False)
+    @cmdhandler(method=False, pass_context=False)
     def info(update: tg.Update):
         """Show info message"""
-        with open('text/info.md') as text:
-            update.message.reply_markdown(text.read().strip())
+        update.message.reply_markdown(INFO_TXT)
 
     @staticmethod
-    @cmd_handler(pass_session=False)
-    def start(update: tg.Update):
+    @cmdhandler(method=False)
+    def start(update: tg.Update, context: tge.CallbackContext):
         """Start session"""
-        BotSession(update.message.chat_id)
-        with open('text/start.txt') as text:
-            update.message.reply_text(text=text.read().strip())
+        context.chat_data['session'] = BotSession(update.message.chat_id)
+        update.message.reply_text(text=START_TXT)
 
-    @cmd_handler()
+    @cmdhandler()
     def shutdown(self, update: tg.Update):
         self.operation = OngoingOperation.SHUTDOWN
         update.message.reply_text("Are you sure? /yes \t /no")
 
-    @cmd_handler('yes', pass_update=False)
+    @cmdhandler(pass_update=False)
     @ongoing_operation_method
     def yes(self):
+        # TODO: refactor into polymorphism
         if self.operation is OngoingOperation.START_MARATHON:
             self._start_marathon()
         elif self.operation is OngoingOperation.SHUTDOWN:
             self._shutdown()
 
-    @cmd_handler('no')
+    @cmdhandler()
     @ongoing_operation_method
     def no(self, update: tg.Update):
         self.cancel(update)
 
-    @cmd_handler('cancel')
+    @cmdhandler()
+    @ongoing_operation_method
     def cancel(self, update: tg.Update):
         update.message.reply_text("Cancelled the operation '{}'".format(self.operation.value))
 
-    @cmd_handler()
+    @cmdhandler()
     def new_marathon(self, update: tg.Update):
         """Create new marathon"""
         self.marathon = mth.Marathon()
         with open('text/new_marathon.txt') as text:
             update.message.reply_markdown(text=text.read().strip())
 
-    @cmd_handler()
+    @cmdhandler()
     @marathon_method
     def settings(self, update: tg.Update):
         """Show settings"""
         update.message.reply_markdown(text=self._settings_text())
 
-    @cmd_handler(pass_args=True)
+    @cmdhandler(pass_context=True)
     @marathon_method
-    def set_sites(self, update: tg.Update, args: List[str]):
+    def set_sites(self, update: tg.Update, context: tge.CallbackContext):
         self.marathon.clear_sites()
-        for site in args:
+        for site in context.args:
             try:
                 self.marathon.add_site(site)
             except mth.SiteNotFoundError as err:
@@ -217,9 +268,9 @@ class BotSession:
         text = '\n'.join(("Successfully set sites to:", self._sites_text()))
         update.message.reply_markdown(text=text)
 
-    @cmd_handler(pass_args=True)
+    @cmdhandler(pass_context=True)
     @marathon_method
-    def add_participants(self, update: tg.Update, args: List[str]):
+    def add_participants(self, update: tg.Update, context: tge.CallbackContext):
         """Add participants to marathon"""
 
         def msg_lines(p: mth.Participant):
@@ -244,9 +295,10 @@ class BotSession:
 
     # TODO: remove participant
 
-    @cmd_handler(pass_args=True)
+    @cmdhandler(pass_context=True)
     @marathon_method
-    def set_duration(self, update: tg.Update, args: List[str]):
+    def set_duration(self, update: tg.Update, context: tge.CallbackContext):
+        args = context.args
         try:
             hours, minutes = 0, 0
             if len(args) == 1:
@@ -254,16 +306,18 @@ class BotSession:
             elif len(args) == 2:
                 hours, minutes = int(args[0]), int(args[1])
             else:
-                self._handle_error(BotArgumentError("Expected one or two argument"))
+                # TODO: raise exceptions directly
+                self._handle_error(ArgCountError("Expected one or two argument"))
 
             self.marathon.duration = datetime.timedelta(hours=hours, minutes=minutes)
             update.message.reply_markdown(
                 "Set the duration to *{}* (_hh:mm:ss_ )".format(self.marathon.duration))
         except ValueError:
-            self._handle_error(BotArgumentError("Invalid duration given"))
+            self._handle_error(ArgValueError("Invalid duration given"))
 
-    @cmd_handler(pass_args=True)
-    def schedule(self, update: tg.Update, args: List[str]):
+    @cmdhandler(pass_context=True)
+    def schedule(self, update: tg.Update, context: tge.CallbackContext):
+        args = context.args
         try:
             day, time_of_day = datetime.date.today(), datetime.time()
             if len(args) == 1:
@@ -275,34 +329,44 @@ class BotSession:
                 hour_num, minute_num = (int(num) for num in args[1].split(':'))
                 time_of_day = datetime.time(hour=hour_num, minute=minute_num)
             else:
-                self._handle_error(BotArgumentError("Expected one or two arguments"))
+                self._handle_error(ArgCountError("Expected one or two arguments"))
 
             date_time = datetime.datetime.combine(day, time_of_day)
             JOB_QUEUE.run_once(callback=self.start_scheduled_marathon,
                                when=date_time, context=self.id)
             update.message.reply_markdown("Scheduled marathon start for *{}*".format(date_time))
         except ValueError:
-            self._handle_error(BotArgumentError("Invalid date/time given"))
+            self._handle_error(ArgValueError("Invalid date/time given"))
 
-    @cmd_handler()
+    @cmdhandler()
     def start_marathon(self, update: tg.Update):
-        text = '\n\n'.join(("Starting the marathon with the following settings:",
+        text = '\n\n'.join(["Starting the marathon with the following settings:",
                             self._settings_text(),
-                            "Continue?\t/yes\t /no"))
+                            "Continue?\t/yes\t /no"])
         self.operation = OngoingOperation.START_MARATHON
         update.message.reply_markdown(text=text)
 
-    @cmd_handler()
+    @cmdhandler()
     @marathon_method
     def status(self, update: tg.Update):
         update.message.reply_markdown(text=self._status_text())
 
-    @cmd_handler()
+    @cmdhandler()
     @marathon_method
     def leaderboard(self, update: tg.Update):
         update.message.reply_markdown(text=self._leaderboard_text())
 
-    # ----- job callbacks -----
+    @cmdhandler()
+    def pause_marathon(self, update: tg.Update):
+        # TODO: implement pause_marathon
+        raise NotImplementedError
+
+    @cmdhandler()
+    def stop_marathon(self, update: tg.Update):
+        # TODO: implement stop_marathon
+        raise NotImplementedError
+
+    # ---------------------------------- Job callbacks  ----------------------------------
 
     @job_callback()
     def send_status_update(self):
@@ -324,7 +388,7 @@ class BotSession:
     def start_scheduled_marathon(self):
         self._start_marathon()
 
-    # ----- utility methods -----
+    # ---------------------------------- Utility methods  ----------------------------------
 
     def check_marathon_created(self) -> bool:
         if not self.marathon:
@@ -420,6 +484,7 @@ class BotSession:
 
     def _handle_error(self, error: Exception, additional_msg: str = "", *,
                       require_action: bool = False, callback: callable = None):
+        # TODO: use markdown safe reply
         error_text = '\n\n'.join(("*ERROR*: {}".format(error), additional_msg))
         error_message = BOT.send_message(chat_id=self.id, text=error_text,
                                          parse_mode=ParseMode.MARKDOWN)
@@ -438,7 +503,7 @@ class BotSession:
         self.marathon.destroy()
         for job in JOB_QUEUE.jobs():
             job.schedule_removal()
-        del BotSession.sessions[self.id]
+        del BotSession.SESSIONS[self.id]
         BOT.send_message(chat_id=self.id, text="I'm now sleeping. Reactivate with /start.")
 
 
@@ -456,7 +521,7 @@ def start_bot():
 def shutdown_bot():
     logging.info("Shutting down bot")
     UPDATER.stop()
-    for chat in BotSession.sessions:
+    for chat in BotSession.SESSIONS:
         BOT.send_message(chat_id=chat,
                          text="*SERVER SHUTDOWN* – Going to sleep with the fishes...",
                          parse_mode=ParseMode.MARKDOWN)
