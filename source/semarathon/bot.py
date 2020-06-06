@@ -352,6 +352,12 @@ class BotSession:
         update.message.reply_markdown(text=self._leaderboard_text())
 
     @cmdhandler()
+    @marathon_method
+    def time(self, update: tg.Update):
+        # TODO: implement time
+        raise NotImplementedError
+
+    @cmdhandler()
     def pause_marathon(self, update: tg.Update):
         # TODO: implement pause_marathon
         raise NotImplementedError
