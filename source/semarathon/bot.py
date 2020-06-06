@@ -17,6 +17,7 @@ from typing import Dict, Callable, Optional, Union
 import telegram as tg
 import telegram.ext as tge
 from telegram.parsemode import ParseMode
+from markdown_strings import esc_format
 
 from semarathon import marathon as mth
 from semarathon.persistence import *
@@ -119,7 +120,7 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
                 logging.info(f'served {command_info}')
             except (UsageError, ValueError, mth.SEMarathonError) as e:
                 text = '\n\n'.join([USAGE_ERROR_TXT, format_exception_md(e),
-                                    getattr(e, 'help_txt', "See /info for usage info")])
+                                    esc_format(getattr(e, 'help_txt', "See /info for usage info"))])
                 markdown_safe_reply(update.message, text)
                 logging.info(f'served {command_info} (with usage/algorithm error)')
             except Exception as e:
