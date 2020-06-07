@@ -132,7 +132,7 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
 
         handler = tge.CommandHandler(command_, decorated, **handler_kwargs)
         DISPATCHER.add_handler(handler)
-        return decorated
+        return callback
 
     return decorator
 
