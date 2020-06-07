@@ -1,6 +1,7 @@
 import logging
 
 # TODO: extract script for running bot
+# TODO: fix jobqueue persistence
 
 # noinspection SpellCheckingInspection
 logging.basicConfig(format='%(asctime)s - %(name)s:%(levelname)s - %(message)s',
@@ -30,6 +31,8 @@ UPDATER = tge.Updater(token=TOKEN, use_context=True)
 BOT, DISPATCHER, JOB_QUEUE = UPDATER.bot, UPDATER.dispatcher, UPDATER.job_queue
 
 # Load text files:
+# TODO: load all texts beforehand
+# TODO: memoize load_text
 USAGE_ERROR_TXT = load_text('usage-error')
 INTERNAL_ERROR_TXT = load_text('internal-error')
 INFO_TXT = load_text('info')
@@ -119,12 +122,12 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
 
                 logging.info(f'served {command_info}')
             except (UsageError, ValueError, mth.SEMarathonError) as e:
-                text = '\n\n'.join([USAGE_ERROR_TXT, format_exception_md(e),
-                                    esc_format(getattr(e, 'help_txt', "See /info for usage info"))])
+                text = f"{USAGE_ERROR_TXT}\n{format_exception_md(e)}\n\n" \
+                       f"{esc_format(getattr(e, 'help_txt', 'See /info for usage info'))}"
                 markdown_safe_reply(update.message, text)
                 logging.info(f'served {command_info} (with usage/algorithm error)')
             except Exception as e:
-                text = '\n\n'.join([INTERNAL_ERROR_TXT, format_exception_md(e)])
+                text = f"{INTERNAL_ERROR_TXT}"
                 markdown_safe_reply(update.message, text)
                 logging.error(f'{command_info}: unexpected exception', exc_info=e)
             finally:
@@ -244,7 +247,7 @@ class BotSession:
     @cmdhandler()
     @ongoing_operation_method
     def cancel(self, update: tg.Update):
-        update.message.reply_text("Cancelled the operation '{}'".format(self.operation.value))
+        update.message.reply_text(f"Cancelled the operation '{self.operation.value}'")
 
     @cmdhandler()
     def new_marathon(self, update: tg.Update):
@@ -257,7 +260,8 @@ class BotSession:
     @marathon_method
     def settings(self, update: tg.Update):
         """Show settings"""
-        update.message.reply_markdown(text=self._settings_text())
+        text = f"Current settings for marathon:\n\n{self._settings_text()}"
+        update.message.reply_markdown(text=text)
 
     @cmdhandler(pass_context=True)
     @marathon_method
@@ -266,8 +270,7 @@ class BotSession:
         for site in context.args:
             self.marathon.add_site(site)
 
-        # TODO: replace joins with f-strings
-        text = '\n'.join(("Successfully set sites to:", self._sites_text()))
+        text = f"Successfully set sites to:\n{self._sites_text()}"
         update.message.reply_markdown(text=text)
 
     @cmdhandler(pass_context=True)
@@ -276,11 +279,10 @@ class BotSession:
         """Add participants to marathon"""
 
         def msg_lines(p: mth.Participant):
-            yield "Added *{}* to marathon:".format(p.name)
+            yield f"Added *{p.name}* to marathon:"
             for site in self.marathon.sites:
                 user = p.user(site)
-                yield " - _{}_ : [user ID {}]({})".format(mth.SITES[site]['name'], user.id,
-                                                          user.link)
+                yield f" - _{mth.SITES[site]['name']}_ : [user ID {user.id}]({user.link})"
             yield ""
             yield "Please verify the IDs are correct."
 
@@ -307,7 +309,7 @@ class BotSession:
 
             self.marathon.duration = datetime.timedelta(hours=hours, minutes=minutes)
             update.message.reply_markdown(
-                "Set the duration to *{}* (_hh:mm:ss_ )".format(self.marathon.duration))
+                f"Set the duration to *{self.marathon.duration}* (_hh:mm:ss_ )")
         except ValueError:
             raise ArgValueError("Invalid duration given")
 
@@ -330,15 +332,14 @@ class BotSession:
             date_time = datetime.datetime.combine(day, time_of_day)
             JOB_QUEUE.run_once(callback=self.start_scheduled_marathon,
                                when=date_time, context=self.id)
-            update.message.reply_markdown("Scheduled marathon start for *{}*".format(date_time))
+            update.message.reply_markdown(f"Scheduled marathon start for *{date_time}*")
         except ValueError:
             raise ArgValueError("Invalid date/time given")
 
     @cmdhandler()
     def start_marathon(self, update: tg.Update):
-        text = '\n\n'.join(["Starting the marathon with the following settings:",
-                            self._settings_text(),
-                            "Continue?\t/yes\t /no"])
+        text = f"Starting the marathon with the following settings:\n\n" \
+               f"{self._settings_text()}\n\nContinue?\t/yes \t/no"
         self.operation = OngoingOperation.START_MARATHON
         update.message.reply_markdown(text=text)
 
@@ -372,7 +373,7 @@ class BotSession:
 
     @job_callback()
     def send_status_update(self):
-        text = '\n\n'.join((self._status_text(), self._leaderboard_text()))
+        text = f"{self._status_text()}\n\n{self._leaderboard_text()}"
         BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
     @job_callback()
@@ -381,9 +382,9 @@ class BotSession:
         seconds = int(remaining.total_seconds())
         minutes = seconds//60
         if minutes >= 1:
-            text = "*{} minutes remaining!*".format(minutes)
+            text = f"*{minutes} minutes remaining!*"
         else:
-            text = "_*{} seconds remaining!*_".format(seconds)
+            text = f"_*{seconds} seconds remaining!*_"
         BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
     @job_callback()
@@ -406,10 +407,9 @@ class BotSession:
 
     def _settings_text(self) -> str:
         def lines():
-            yield "Current settings for marathon:"
             yield self._sites_text()
             yield self._participants_text()
-            yield "*Duration*: {} (_hh:mm:ss_ )".format(self.marathon.duration)
+            yield f"*Duration*: {self.marathon.duration} (_hh:mm:ss_ )"
 
         return '\n\n'.join(lines())
 
@@ -417,7 +417,7 @@ class BotSession:
         def lines():
             yield "*Sites*:"
             for site in self.marathon.sites:
-                yield "\t - _{}_".format(mth.SITES[site]['name'])
+                yield f"\t - _{mth.SITES[site]['name']}_"
 
         return '\n'.join(lines())
 
@@ -425,7 +425,7 @@ class BotSession:
         def lines():
             yield "*Sites*:"
             for site in self.marathon.sites:
-                yield "\t - {}".format(mth.SITES[site]['name'])
+                yield f"\t - {mth.SITES[site]['name']}"
 
         return '\n'.join(lines())
 
@@ -434,7 +434,7 @@ class BotSession:
             yield "LEADERBOARD\n"
             participants = self.marathon.participants.values()
             for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                yield "{}. *{}* – {} points".format(i, p, p.score)
+                yield f"{i}. *{p}* – {p.score} points"
 
         return '\n'.join(lines())
 
@@ -477,9 +477,9 @@ class BotSession:
 
             def per_site():
                 for site, increment in update.per_site.items():
-                    yield " _{}_  ({:+})".format(mth.SITES[site]['name'], increment)
+                    yield f" _{mth.SITES[site]['name']}_  ({increment:+})"
 
-            text = "*{}* just gained *{:+}* reputation on".format(update.participant, update.total)
+            text = f"*{update.participant}* just gained *{update.total:+}* reputation on"
             text += ', '.join(per_site())
             BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
