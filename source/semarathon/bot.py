@@ -12,7 +12,6 @@ if __name__ == '__main__':
 
 import atexit
 import datetime
-from enum import Enum
 from typing import Dict, Callable, Optional, Union
 
 import telegram as tg
@@ -374,18 +373,15 @@ class BotSession:
     @job_callback()
     def send_status_update(self):
         text = f"{self._status_text()}\n\n{self._leaderboard_text()}"
-        BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
+        self._send_message(text)
 
     @job_callback()
     def countdown(self):
         _, remaining = self.marathon.elapsed_remaining()
         seconds = int(remaining.total_seconds())
         minutes = seconds//60
-        if minutes >= 1:
-            text = f"*{minutes} minutes remaining!*"
-        else:
-            text = f"_*{seconds} seconds remaining!*_"
-        BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
+        fmt = f"{minutes} minutes" if minutes >= 1 else f"{seconds} seconds"
+        self._send_message(f"*{fmt} remaining!*")
 
     @job_callback()
     def start_scheduled_marathon(self):
@@ -404,6 +400,9 @@ class BotSession:
     def check_operation_ongoing(self) -> None:
         if self.operation is None:
             raise UsageError("No ongoing operation")
+
+    def _send_message(self, text):
+        BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
 
     def _settings_text(self) -> str:
         def lines():
@@ -448,8 +447,7 @@ class BotSession:
 
     def _start_marathon(self):
         self.marathon.start(target=self._marathon_update_handler())
-        BOT.send_message(chat_id=self.id, text="*_Alright, marathon has begun!_*",
-                         parse_mode=ParseMode.MARKDOWN)
+        self._send_message("*_Alright, marathon has begun!_*")
         JOB_QUEUE.run_repeating(name='periodic updates',
                                 callback=self.send_status_update,
                                 interval=self.marathon.refresh_interval,
@@ -481,7 +479,7 @@ class BotSession:
 
             text = f"*{update.participant}* just gained *{update.total:+}* reputation on"
             text += ', '.join(per_site())
-            BOT.send_message(chat_id=self.id, text=text, parse_mode=ParseMode.MARKDOWN)
+            self._send_message(text)
 
     def _shutdown(self):
         self.marathon.destroy()
