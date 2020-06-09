@@ -1,4 +1,5 @@
 import threading
+from typing import Callable
 
 import telegram
 import telegram.ext.filters
@@ -79,3 +80,6 @@ def format_exception_md(exception) -> str:
     if extra:
         msg += '`:` {}'.format(extra)
     return msg
+
+
+Decorator = Callable[[Callable], Callable]

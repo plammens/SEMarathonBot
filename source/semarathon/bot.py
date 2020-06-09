@@ -12,7 +12,7 @@ if __name__ == '__main__':
 import atexit
 import datetime
 import functools
-from typing import Dict, Callable, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import telegram as tg
 import telegram.ext as tge
@@ -41,10 +41,9 @@ MARATHON_NOT_CREATED_TXT = load_text('marathon_not_created')
 # --------------------------------------- Helpers  ---------------------------------------
 
 # type aliases
-Runnable = Callable[[], None]
-Decorator = Callable[[Callable], Callable]
 CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
 CommandCallbackMethod = Callable[['BotSession', tg.Update], None]
+BotSessionRunnable = Callable[['BotSession'], Any]
 
 
 class UsageError(Exception):
@@ -195,7 +194,7 @@ def ongoing_operation_method(method: callable) -> callable:
     return decorated_method
 
 
-def require_confirmation(op_name: str = None, *, target: Runnable) -> Decorator:
+def require_confirmation(op_name: str = None, *, target: BotSessionRunnable) -> Decorator:
     """For commands that define operations that require confirmation from the user"""
 
     def decorator(method: CommandCallbackMethod) -> Callable:
@@ -218,7 +217,7 @@ def require_confirmation(op_name: str = None, *, target: Runnable) -> Decorator:
 class BotSession:
     class Operation:
         session: 'BotSession'
-        target: Runnable
+        target: BotSessionRunnable  # TODO: fix (should be BotSession method)
 
         def __init__(self, name: str, session: 'BotSession', target: Callable[[], None]):
             self.session = session
@@ -226,7 +225,7 @@ class BotSession:
             self.name = name
 
         def execute(self):
-            self.target()
+            self.target(self.session)
 
         def cancel(self):
             self.session.operation = None
