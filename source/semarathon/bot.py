@@ -533,10 +533,11 @@ def start_bot():
 def shutdown_bot():
     logging.info("Shutting down bot")
     UPDATER.stop()
-    for chat in BotSession.SESSIONS:
+    for chat in BotSession.SESSIONS.copy():
         BOT.send_message(chat_id=chat,
                          text="*SERVER SHUTDOWN* – Going to sleep with the fishes...",
                          parse_mode=ParseMode.MARKDOWN)
+        del BotSession.SESSIONS[chat]
     save_jobs(JOB_QUEUE)
 
 
