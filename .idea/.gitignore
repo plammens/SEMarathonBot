@@ -1,2 +1,6 @@
 # Default ignored files
 /workspace.xml
+
+# Custom
+/misc.xml
+/tasks.xml
