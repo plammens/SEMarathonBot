@@ -12,6 +12,7 @@ if __name__ == '__main__':
 
 import atexit
 import datetime
+import functools
 from typing import Dict, Callable, Optional, Union
 
 import telegram as tg
@@ -106,6 +107,7 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
     def decorator(callback: CommandCallbackType) -> CommandCallbackType:
         command_ = command or callback.__name__
 
+        @functools.wraps(callback)
         def decorated(update: tg.Update, context: tge.CallbackContext):
             command_info = f'/{command_}@{update.effective_chat.id}'
             logging.info(f'reached {command_info}')
@@ -145,6 +147,7 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
     def decorator(callback: callable) -> callable:
         """Actual decorator"""
 
+        @functools.wraps(callback)
         def decorated(bot: tg.Bot, job: tge.Job, *args, **kwargs):
             chat_id = job.context
             session = BotSession.SESSIONS.get(chat_id, None)
@@ -166,15 +169,16 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
 
 
 def marathon_method(method: callable) -> callable:
+    @functools.wraps(method)
     def decorated_method(session: 'BotSession', *args, **kwargs):
         session.check_marathon_created()
         method(session, *args, **kwargs)
 
-    decorated_method.__name__ = method.__name__
     return decorated_method
 
 
 def running_marathon_method(method: callable) -> callable:
+    @functools.wraps(method)
     def decorated_method(session: 'BotSession', *args, **kwargs):
         session.check_marathon_created()
         session.check_marathon_running()
@@ -185,6 +189,7 @@ def running_marathon_method(method: callable) -> callable:
 
 
 def ongoing_operation_method(method: callable) -> callable:
+    @functools.wraps(method)
     def decorated_method(session: 'BotSession', *args, **kwargs):
         session.check_operation_ongoing()
         method(session, *args, **kwargs)
