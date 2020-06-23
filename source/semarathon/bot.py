@@ -12,7 +12,7 @@ if __name__ == '__main__':
 import atexit
 import datetime
 import functools
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import telegram as tg
 import telegram.ext as tge
@@ -27,7 +27,9 @@ from semarathon.utils import *
 # Construct bot objects:
 TOKEN = load_text('token')
 UPDATER = tge.Updater(token=TOKEN, use_context=True)
-BOT, DISPATCHER, JOB_QUEUE = UPDATER.bot, UPDATER.dispatcher, UPDATER.job_queue
+BOT: tg.Bot = UPDATER.bot
+DISPATCHER: tge.Dispatcher = UPDATER.dispatcher
+JOB_QUEUE: tge.JobQueue = UPDATER.job_queue
 
 # Load text files:
 # TODO: load all texts beforehand
@@ -42,7 +44,7 @@ MARATHON_NOT_CREATED_TXT = load_text('marathon_not_created')
 
 # type aliases
 CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
-CommandCallbackMethod = Callable[['BotSession', tg.Update], None]
+CommandCallbackMethod = Callable[['BotSession', tg.Update, tge.CallbackContext], None]
 BotSessionRunnable = Callable[['BotSession'], Any]
 
 
@@ -73,8 +75,7 @@ def get_session(context: tge.CallbackContext):
 # --------------------------------------- Decorators  ---------------------------------------
 
 
-def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = True,
-               pass_context: bool = None, **handler_kwargs) -> Decorator:
+def cmdhandler(command: str = None, *, method: bool = True, **handler_kwargs) -> Decorator:
     """
     Decorator factory for command handlers. The returned decorator adds
     the decorated function as a command handler for the command ``command``
@@ -86,20 +87,17 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
 
     :param command: name of bot command to add a handler for
     :param method: whether the callback is in the form of a BotSession method
-    :param pass_update: whether to pass the tg.Update to the callback
-    :param pass_context: whether to pass the tge.CallbackContext to the callback
-                         (defaults to ``not method``)
     :param handler_kwargs: additional keyword arguments for the
                            creation of the command handler (these will be passed
                            to ``telegram.ext.dispatcher.add_handler``)
     :return: the decorated function, unchanged
     """
-    # TODO: consider forcing pass context
 
-    pass_context = pass_context if pass_context is not None else not method
+    # noinspection PyPep8Naming
+    T = TypeVar('T', CommandCallback, CommandCallbackMethod)
 
     # Actual decorator
-    def decorator(callback: Union[CommandCallback, CommandCallbackMethod]) -> CommandCallback:
+    def decorator(callback: T) -> T:
         command_ = command or callback.__name__
 
         @functools.wraps(callback)
@@ -108,12 +106,11 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
             logging.info(f'reached {command_info}')
             try:
                 # Build arguments list:
-                args = []
-                if method: args.append(get_session(context))
-                if pass_update: args.append(update)
-                if pass_context: args.append(context)
+                args = [update, context]
+                if method: args.insert(0, get_session(context))
 
                 # Actual call:
+                # TODO: send typing action?
                 callback(*args)
 
                 logging.info(f'served {command_info}')
@@ -136,10 +133,10 @@ def cmdhandler(command: str = None, *, method: bool = True, pass_update: bool = 
     return decorator
 
 
-def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
+def job_callback(pass_session: bool = True, pass_bot: bool = False) -> Callable:
     """Returns specialized decorator for Job callback functions"""
 
-    def decorator(callback: callable) -> callable:
+    def decorator(callback: Callable) -> Callable:
         """Actual decorator"""
 
         @functools.wraps(callback)
@@ -163,16 +160,17 @@ def job_callback(pass_session: bool = True, pass_bot: bool = False) -> callable:
     return decorator
 
 
-def marathon_method(method: callable) -> callable:
+def marathon_method(method: Callable) -> Callable:
     @functools.wraps(method)
     def decorated_method(session: 'BotSession', *args, **kwargs):
+        assert session.marathon is not None
         session.check_marathon_created()
         method(session, *args, **kwargs)
 
     return decorated_method
 
 
-def running_marathon_method(method: callable) -> callable:
+def running_marathon_method(method: Callable) -> Callable:
     @functools.wraps(method)
     def decorated_method(session: 'BotSession', *args, **kwargs):
         session.check_marathon_created()
@@ -183,7 +181,7 @@ def running_marathon_method(method: callable) -> callable:
     return decorated_method
 
 
-def ongoing_operation_method(method: callable) -> callable:
+def ongoing_operation_method(method: Callable) -> Callable:
     @functools.wraps(method)
     def decorated_method(session: 'BotSession', *args, **kwargs):
         session.check_operation_ongoing()
@@ -201,9 +199,10 @@ def require_confirmation(op_name: str = None, *, target: BotSessionRunnable) -> 
         op_name_ = op_name or method.__name__
 
         @functools.wraps(method)
-        def decorated_method(session: 'BotSession', *args, **kwargs):
+        def decorated_method(session: 'BotSession', update: tg.Update,
+                             context: tge.CallbackContext):
             session.operation = BotSession.Operation(op_name_, session, target)
-            rvalue = method(session, *args, **kwargs)
+            rvalue = method(session, update, context)
             session.send_message(f"Continue `{op_name_}`? \t/yes \t/no")
             return rvalue
 
@@ -214,12 +213,13 @@ def require_confirmation(op_name: str = None, *, target: BotSessionRunnable) -> 
 
 # --------------------------------------- BotSession  ---------------------------------------
 
+# noinspection PyUnusedLocal
 class BotSession:
     class Operation:
         session: 'BotSession'
         target: BotSessionRunnable  # TODO: fix (should be BotSession method)
 
-        def __init__(self, name: str, session: 'BotSession', target: Callable[[], None]):
+        def __init__(self, name: str, session: 'BotSession', target: BotSessionRunnable):
             self.session = session
             self.target = target
             self.name = name
@@ -246,8 +246,8 @@ class BotSession:
     # ---------------------------------- Command handlers  ----------------------------------
 
     @staticmethod
-    @cmdhandler(method=False, pass_context=False)
-    def info(update: tg.Update):
+    @cmdhandler(method=False)
+    def info(update: tg.Update, context: tge.CallbackContext):
         """Show info message"""
         update.message.reply_markdown(INFO_TXT)
 
@@ -267,26 +267,26 @@ class BotSession:
 
     @cmdhandler()
     @require_confirmation(target=_shutdown)
-    def shutdown(self, update: tg.Update):
+    def shutdown(self, update: tg.Update, context: tge.CallbackContext):
         update.message.reply_text("Shutting down...")
 
-    @cmdhandler(pass_update=False)
+    @cmdhandler()
     @ongoing_operation_method
-    def yes(self):
+    def yes(self, update: tg.Update, context: tge.CallbackContext):
         self.operation.execute()
 
     @cmdhandler()
     @ongoing_operation_method
-    def no(self, update: tg.Update):
+    def no(self, update: tg.Update, context: tge.CallbackContext):
         self.cancel(update)
 
     @cmdhandler()
     @ongoing_operation_method
-    def cancel(self, update: tg.Update):
-        update.message.reply_text(f"Operation cancelled: {self.operation.name}")
+    def cancel(self, update: tg.Update, context: tge.CallbackContext):
+        self.send_message(f"Operation cancelled: `{self.operation.name}`")
 
     @cmdhandler()
-    def new_marathon(self, update: tg.Update):
+    def new_marathon(self, update: tg.Update, context: tge.CallbackContext):
         """Create new marathon"""
         self.marathon = mth.Marathon()
         with open('text/new_marathon.txt') as text:
@@ -294,12 +294,12 @@ class BotSession:
 
     @cmdhandler()
     @marathon_method
-    def settings(self, update: tg.Update):
+    def settings(self, update: tg.Update, context: tge.CallbackContext):
         """Show settings"""
         text = f"Current settings for marathon:\n\n{self._settings_text()}"
         update.message.reply_markdown(text=text)
 
-    @cmdhandler(pass_context=True)
+    @cmdhandler()
     @marathon_method
     def set_sites(self, update: tg.Update, context: tge.CallbackContext):
         self.marathon.clear_sites()
@@ -309,7 +309,7 @@ class BotSession:
         text = f"Successfully set sites to:\n{self._sites_text()}"
         update.message.reply_markdown(text=text)
 
-    @cmdhandler(pass_context=True)
+    @cmdhandler()
     @marathon_method
     def add_participants(self, update: tg.Update, context: tge.CallbackContext):
         """Add participants to marathon"""
@@ -330,7 +330,7 @@ class BotSession:
 
     # TODO: remove participant
 
-    @cmdhandler(pass_context=True)
+    @cmdhandler()
     @marathon_method
     def set_duration(self, update: tg.Update, context: tge.CallbackContext):
         args = context.args
@@ -349,7 +349,7 @@ class BotSession:
         except ValueError:
             raise ArgValueError("Invalid duration given")
 
-    @cmdhandler(pass_context=True)
+    @cmdhandler()
     def schedule(self, update: tg.Update, context: tge.CallbackContext):
         args = context.args
         try:
@@ -397,36 +397,35 @@ class BotSession:
 
     @cmdhandler()
     @require_confirmation(target=_start_marathon)
-    def start_marathon(self, update: tg.Update):
+    def start_marathon(self, update: tg.Update, context: tge.CallbackContext):
         text = f"Starting the marathon with the following settings:\n\n{self._settings_text()}"
-        self.operation = BotSession.Operation('/start_marathon', self, self._start_marathon)
         update.message.reply_markdown(text=text)
 
     @cmdhandler()
     @marathon_method
-    def status(self, update: tg.Update):
+    def status(self, update: tg.Update, context: tge.CallbackContext):
         update.message.reply_markdown(text=self._status_text())
 
     @cmdhandler()
     @marathon_method
-    def leaderboard(self, update: tg.Update):
+    def leaderboard(self, update: tg.Update, context: tge.CallbackContext):
         update.message.reply_markdown(text=self._leaderboard_text())
 
     @cmdhandler()
     @marathon_method
-    def time(self, update: tg.Update):
+    def time(self, update: tg.Update, context: tge.CallbackContext):
         # TODO: implement time
         raise NotImplementedError
 
     @cmdhandler()
-    def pause_marathon(self, update: tg.Update):
+    def pause_marathon(self, update: tg.Update, context: tge.CallbackContext):
         # TODO: implement pause_marathon
         raise NotImplementedError
 
     # ---------------------------------- Job callbacks  ----------------------------------
 
     @cmdhandler()
-    def stop_marathon(self, update: tg.Update):
+    def stop_marathon(self, update: tg.Update, context: tge.CallbackContext):
         # TODO: implement stop_marathon
         raise NotImplementedError
 
@@ -437,7 +436,7 @@ class BotSession:
 
     @job_callback()
     def countdown(self):
-        _, remaining = self.marathon.elapsed_remaining()
+        _, remaining = self.marathon.elapsed_remaining
         seconds = int(remaining.total_seconds())
         minutes = seconds//60
         fmt = f"{minutes} minutes" if minutes >= 1 else f"{seconds} seconds"
@@ -499,7 +498,7 @@ class BotSession:
 
     def _status_text(self) -> str:
         if self.marathon.is_running:
-            elapsed, remaining = self.marathon.elapsed_remaining()
+            elapsed, remaining = self.marathon.elapsed_remaining
             with open('text/running_status.md') as text:
                 return text.read().strip().format(elapsed, remaining)
         else:

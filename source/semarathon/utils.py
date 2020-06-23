@@ -1,5 +1,5 @@
 import threading
-from typing import Callable
+from typing import Callable, TypeVar
 
 import telegram
 import telegram.ext.filters
@@ -47,7 +47,7 @@ class ReplyToMessage(telegram.ext.filters.BaseFilter):
         return message.reply_to_message.message_id == self.message_id
 
 
-def coroutine(func: callable):
+def coroutine(func: Callable):
     def start(*args, **kwargs):
         coro = func(*args, **kwargs)
         coro.send(None)
@@ -82,4 +82,5 @@ def format_exception_md(exception) -> str:
     return msg
 
 
-Decorator = Callable[[Callable], Callable]
+_C = TypeVar('_C', bound=Callable)
+Decorator = Callable[[_C], _C]

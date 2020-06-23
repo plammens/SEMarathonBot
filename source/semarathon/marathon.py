@@ -1,7 +1,7 @@
 import datetime
 import json
 import time
-from typing import Dict, List
+from typing import Dict, Generator, List, Optional, Tuple
 
 import stackapi
 
@@ -24,7 +24,7 @@ class SEMarathonError(Exception):
 
 
 class UserError(SEMarathonError, LookupError):
-    def __init__(self, user: 'Participant.User'):
+    def __init__(self, user: 'Participant.UserProfile'):
         self.user = user
 
     @property
@@ -57,7 +57,7 @@ class SiteNotFoundError(SiteError):
 class Participant:
     name: str
 
-    class User:
+    class UserProfile:
         link: str
         last_checked: int
 
@@ -84,12 +84,12 @@ class Participant:
             updates = results['items']
             if updates: self.last_checked = updates[0]['on_date'] + 1
             increment = sum(u['reputation_change'] for u in updates)
-            return increment
+            return bool(increment)
 
 
     def __init__(self, username: str):
         self.name = username
-        self._users = {}
+        self._users: Dict[str, Participant.UserProfile] = {}
 
     def __str__(self):
         return self.name
@@ -100,12 +100,12 @@ class Participant:
 
     def user(self, site: str):
         if site not in self._users:
-            self._users[site] = Participant.User(site, self.name)
+            self._users[site] = Participant.UserProfile(site, self.name)
         return self._users[site]
 
     def fetch_users(self, *sites: str):
         for site in sites:
-            self._users[site] = Participant.User(site, self.name)
+            self._users[site] = Participant.UserProfile(site, self.name)
 
 
 class Update:
@@ -134,9 +134,9 @@ class Marathon:
     sites: List[str]
     participants: Dict[str, Participant]
     duration: datetime.timedelta
-    start_time: datetime.datetime
-    end_time: datetime.datetime
-    poll_thread: StoppableThread
+    start_time: Optional[datetime.datetime]
+    end_time: Optional[datetime.datetime]
+    poll_thread: Optional[StoppableThread]
 
     def __init__(self, *sites: str):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
@@ -147,9 +147,11 @@ class Marathon:
         self.poll_thread = None
 
     @property
-    def elapsed_remaining(self) -> (datetime.timedelta, datetime.timedelta):
+    def elapsed_remaining(self) -> Tuple[datetime.timedelta, datetime.timedelta]:
         if not self.is_running:
             raise RuntimeError("Marathon isn't running yet")
+        assert self.start_time is not None
+        assert self.end_time is not None
         now = datetime.datetime.now()
         return now - self.start_time, self.end_time - now
 
@@ -192,7 +194,7 @@ class Marathon:
                 if increment: update[site] = increment
             if update: yield update
 
-    def start(self, target: callable):
+    def start(self, target: Generator[None, Update, None]):
         self.start_time = datetime.datetime.now()
         self.end_time = self.start_time + self.duration
 
