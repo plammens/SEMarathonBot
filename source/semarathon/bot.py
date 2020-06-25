@@ -27,14 +27,14 @@ INFO_TXT = load_text('info')
 START_TXT = load_text('start')
 MARATHON_NOT_CREATED_TXT = load_text('marathon_not_created')
 
-# --------------------------------------- Helpers  ---------------------------------------
-
 # type aliases
 CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
 CommandCallbackMethod = Callable[['BotSession', tg.Update, tge.CallbackContext], None]
 BotSessionRunnable = Callable[['BotSession'], Any]
 T = TypeVar('T', CommandCallback, CommandCallbackMethod)
 
+
+# --------------------------------------- Exceptions  ---------------------------------------
 
 class UsageError(Exception):
     help_txt: str
@@ -52,21 +52,7 @@ class ArgCountError(UsageError):
     pass
 
 
-def _get_bot_system(context: tge.CallbackContext) -> 'SEMarathonBotSystem':
-    try:
-        return SEMarathonBotSystem._instances[context.bot.id]
-    except KeyError:
-        raise RuntimeError("Received an update destined for an uninitialised bot")
-
-
-def _get_session(context: tge.CallbackContext) -> 'SEMarathonBotSystem.Session':
-    try:
-        # TODO: assert equal to sessions field
-        return context.chat_data['session']
-    except KeyError:
-        raise UsageError("Session not initialized",
-                         help_txt="You must use /start before using other commands")
-
+# --------------------------------------- Decorators  ---------------------------------------
 
 class _CommandHandlerCallbackType(enum.Enum):
     FREE_FUNCTION = enum.auto()
@@ -131,8 +117,6 @@ def _make_command_handler(
     handler = tge.CommandHandler(command, decorated, **handler_kwargs)
     return handler
 
-
-# --------------------------------------- Decorators  ---------------------------------------
 
 def cmdhandler(
         command: str = None,
@@ -520,6 +504,7 @@ class SEMarathonBotSystem:
             return '\n'.join(lines())
 
         def _participants_text(self) -> str:
+            # TODO: fix participants text
             def lines():
                 yield "*Sites*:"
                 for site in self.marathon.sites:
@@ -572,3 +557,21 @@ class SEMarathonBotSystem:
         for callback in self._collect_command_callbacks():
             logging.debug(f"Adding command handler for {callback.command_handler.command}")
             self.dispatcher.add_handler(callback.command_handler)
+
+
+# --------------------------------------- Misc helpers  ---------------------------------------
+
+def _get_bot_system(context: tge.CallbackContext) -> 'SEMarathonBotSystem':
+    try:
+        return SEMarathonBotSystem._instances[context.bot.id]
+    except KeyError:
+        raise RuntimeError("Received an update destined for an uninitialised bot")
+
+
+def _get_session(context: tge.CallbackContext) -> 'SEMarathonBotSystem.Session':
+    try:
+        # TODO: assert equal to sessions field
+        return context.chat_data['session']
+    except KeyError:
+        raise UsageError("Session not initialized",
+                         help_txt="You must use /start before using other commands")
