@@ -26,6 +26,7 @@ def load_text(name: str) -> str:
     `text` sub-folder first and then the root working directory.
     :param name: name of the text file
     """
+    # TODO: automatically select parse mode
     for prefix in ('text', '.'):
         for extension in ('md', 'txt', ''):
             try:
