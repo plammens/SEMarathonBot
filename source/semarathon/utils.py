@@ -7,7 +7,7 @@ import telegram.ext.filters
 
 
 def debug_print(msg: str):
-    print('\t'.join(('[SEMB]', msg)))
+    print("\t".join(("[SEMB]", msg)))
 
 
 def markdown_safe_reply(original_message: telegram.Message, reply_txt: str):
@@ -34,15 +34,15 @@ def load_text(name: str) -> str:
     :return: contents of the text file if found
     """
     # TODO: automatically select parse mode
-    for prefix in ('text', '.'):
-        for extension in ('md', 'txt', ''):
+    for prefix in ("text", "."):
+        for extension in ("md", "txt", ""):
             try:
-                path = '{}/{}.{}'.format(prefix, name, extension)
-                with open(path, encoding='utf-8') as file:
+                path = "{}/{}.{}".format(prefix, name, extension)
+                with open(path, encoding="utf-8") as file:
                     return file.read().strip()
             except FileNotFoundError:
                 continue
-    raise FileNotFoundError('could not find `{}` text file'.format(name))
+    raise FileNotFoundError("could not find `{}` text file".format(name))
 
 
 class ReplyToMessage(telegram.ext.filters.BaseFilter):
@@ -83,12 +83,12 @@ class StoppableThread(threading.Thread):
 def format_exception_md(exception) -> str:
     """Format a markdown string from an exception, to be sent through Telegram"""
     assert isinstance(exception, Exception)
-    msg = '`{}`'.format(type(exception).__name__)
+    msg = "`{}`".format(type(exception).__name__)
     extra = str(exception)
     if extra:
-        msg += '`:` {}'.format(extra)
+        msg += "`:` {}".format(extra)
     return msg
 
 
-_C = TypeVar('_C', bound=Callable)
+_C = TypeVar("_C", bound=Callable)
 Decorator = Callable[[_C], _C]

@@ -3,10 +3,11 @@ import datetime
 import functools
 import logging
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # noinspection SpellCheckingInspection
-    logging.basicConfig(format='%(asctime)s - %(name)s:%(levelname)s - %(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s:%(levelname)s - %(message)s", level=logging.DEBUG
+    )
     logging.info("Initializing bot")
 
 from semarathon.utils import load_text
@@ -16,8 +17,9 @@ from semarathon.persistence import load_jobs, save_jobs, save_jobs_job
 
 def start_bot(bot_system: SEMarathonBotSystem):
     logging.info("Starting bot")
-    bot_system.job_queue.run_repeating(callback=save_jobs_job,
-                                       interval=datetime.timedelta(minutes=1))
+    bot_system.job_queue.run_repeating(
+        callback=save_jobs_job, interval=datetime.timedelta(minutes=1)
+    )
     try:
         load_jobs(bot_system.job_queue)
     except FileNotFoundError:
@@ -36,8 +38,8 @@ def shutdown_bot(bot_system: SEMarathonBotSystem):
     save_jobs(bot_system.job_queue)
 
 
-if __name__ == '__main__':
-    se_marathon_bot_system = SEMarathonBotSystem(load_text('token'))
+if __name__ == "__main__":
+    se_marathon_bot_system = SEMarathonBotSystem(load_text("token"))
     atexit.register(functools.partial(shutdown_bot, se_marathon_bot_system))
     start_bot(se_marathon_bot_system)
 

@@ -7,9 +7,9 @@ import stackapi
 
 from semarathon.utils import StoppableThread
 
-with open('data/SE-Sites.json') as db:
+with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
-DEFAULT_SITES = ('stackoverflow', 'math', 'tex')
+DEFAULT_SITES = ("stackoverflow", "math", "tex")
 APIS = {name: stackapi.StackAPI(name) for name in DEFAULT_SITES}
 
 
@@ -24,7 +24,7 @@ class SEMarathonError(Exception):
 
 
 class UserError(SEMarathonError, LookupError):
-    def __init__(self, user: 'Participant.UserProfile'):
+    def __init__(self, user: "Participant.UserProfile"):
         self.user = user
 
     @property
@@ -34,14 +34,16 @@ class UserError(SEMarathonError, LookupError):
 
 class UserNotFoundError(UserError):
     def __str__(self):
-        return "User {} not found at {}".format(self.user.name,
-                                                SITES[self.user.site]['name'])
+        return "User {} not found at {}".format(
+            self.user.name, SITES[self.user.site]["name"]
+        )
 
 
 class MultipleUsersFoundError(UserError):
     def __str__(self):
-        return "Multiple candidates found for user '{}' at {}".format(self.user.name,
-                                                                      SITES[self.user.site]['name'])
+        return "Multiple candidates found for user '{}' at {}".format(
+            self.user.name, SITES[self.user.site]["name"]
+        )
 
 
 class SiteError(SEMarathonError, LookupError):
@@ -65,27 +67,34 @@ class Participant:
             self.site = site
             self.name = username
 
-            results = get_api(site).fetch('users', inname=username, sort='name', order='desc',
-                                          min=username, max=username)['items']
+            results = get_api(site).fetch(
+                "users",
+                inname=username,
+                sort="name",
+                order="desc",
+                min=username,
+                max=username,
+            )["items"]
             if not results:
                 raise UserNotFoundError(self)
             elif len(results) > 1:
                 raise MultipleUsersFoundError(self)
             user_data = results[0]
 
-            self.id = user_data['user_id']
-            self.link = SITES[site]['site_url'] + '/users/{}/'.format(self.id)
+            self.id = user_data["user_id"]
+            self.link = SITES[site]["site_url"] + "/users/{}/".format(self.id)
             self.last_checked = int(time.time())
             self.score = 0
 
         def update(self) -> bool:
-            results = get_api(self.site).fetch('users/{}/reputation'.format(self.id),
-                                               fromdate=self.last_checked)
-            updates = results['items']
-            if updates: self.last_checked = updates[0]['on_date'] + 1
-            increment = sum(u['reputation_change'] for u in updates)
+            results = get_api(self.site).fetch(
+                "users/{}/reputation".format(self.id), fromdate=self.last_checked
+            )
+            updates = results["items"]
+            if updates:
+                self.last_checked = updates[0]["on_date"] + 1
+            increment = sum(u["reputation_change"] for u in updates)
             return bool(increment)
-
 
     def __init__(self, username: str):
         self.name = username
@@ -173,7 +182,8 @@ class Marathon:
         return self.poll_thread is not None and not self.poll_thread.stopped
 
     def add_site(self, site: str):
-        if site not in SITES: raise SiteNotFoundError(site)
+        if site not in SITES:
+            raise SiteNotFoundError(site)
         self.sites.append(site)
         for participant in self.participants.values():
             participant.fetch_users(site)
@@ -191,8 +201,10 @@ class Marathon:
             update = Update(participant)
             for site in self.sites:
                 increment = participant.user(site).update()
-                if increment: update[site] = increment
-            if update: yield update
+                if increment:
+                    update[site] = increment
+            if update:
+                yield update
 
     def start(self, target: Generator[None, Update, None]):
         self.start_time = datetime.datetime.now()
