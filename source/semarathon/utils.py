@@ -1,3 +1,4 @@
+import functools
 import threading
 from typing import Callable, TypeVar
 
@@ -20,18 +21,24 @@ def markdown_safe_reply(original_message: telegram.Message, reply_txt: str):
         original_message.reply_text(reply_txt)
 
 
+@functools.lru_cache
 def load_text(name: str) -> str:
-    """
-    Utility to read and return the entire contents of a text file. Searches the
-    `text` sub-folder first and then the root working directory.
-    :param name: name of the text file
+    """Find a text file and return its contents.
+
+    Searches the `text` sub-folder first and then the root working directory for
+    files with a certain name and whose extension is either ``.txt`` or ``.md``.
+    This function is memoized, so loading the same text will be much faster after the
+    first time.
+
+    :param name: name of the text file (without the extension)
+    :return: contents of the text file if found
     """
     # TODO: automatically select parse mode
     for prefix in ('text', '.'):
         for extension in ('md', 'txt', ''):
             try:
-                with open('{}/{}.{}'.format(prefix, name, extension), mode='r',
-                          encoding='utf-8') as file:
+                path = '{}/{}.{}'.format(prefix, name, extension)
+                with open(path, encoding='utf-8') as file:
                     return file.read().strip()
             except FileNotFoundError:
                 continue

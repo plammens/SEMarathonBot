@@ -1,6 +1,5 @@
 import datetime
 import enum
-import functools
 import inspect
 import itertools
 import logging
@@ -17,15 +16,7 @@ from semarathon.utils import *
 
 # TODO: fix jobqueue persistence
 # TODO: auto update command list to BotFather
-
-# Load text files:
-# TODO: load all texts beforehand
-# TODO: memoize load_text
-USAGE_ERROR_TXT = load_text('usage-error')
-INTERNAL_ERROR_TXT = load_text('internal-error')
-INFO_TXT = load_text('info')
-START_TXT = load_text('start')
-MARATHON_NOT_CREATED_TXT = load_text('marathon_not_created')
+# TODO: use Markdown v2
 
 # type aliases
 CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
@@ -103,12 +94,12 @@ def _make_command_handler(
 
             logging.info(f'served {command_info}')
         except (UsageError, ValueError, mth.SEMarathonError) as e:
-            text = f"{USAGE_ERROR_TXT}\n{format_exception_md(e)}\n\n" \
+            text = f"{load_text('usage-error')}\n{format_exception_md(e)}\n\n" \
                    f"{esc_format(getattr(e, 'help_txt', 'See /info for usage info'))}"
             markdown_safe_reply(update.message, text)
             logging.info(f'served {command_info} (with usage/algorithm error)')
         except Exception as e:
-            text = f"{INTERNAL_ERROR_TXT}"
+            text = f"{load_text('internal-error')}"
             markdown_safe_reply(update.message, text)
             logging.error(f'{command_info}: unexpected exception', exc_info=e)
         finally:
@@ -237,7 +228,7 @@ class SEMarathonBotSystem:
     @cmdhandler(callback_type=_CommandHandlerCallbackType.FREE_FUNCTION)
     def info(update: tg.Update, context: tge.CallbackContext):
         """Callback for /info: show info message"""
-        update.message.reply_markdown(INFO_TXT)
+        update.message.reply_markdown(load_text('info'))
 
     @cmdhandler(callback_type=_CommandHandlerCallbackType.BOT_SYSTEM_METHOD)
     def start(self, update: tg.Update, context: tge.CallbackContext):
@@ -245,7 +236,7 @@ class SEMarathonBotSystem:
         chat_id = update.message.chat_id
         session = SEMarathonBotSystem.Session(self, chat_id)
         context.chat_data['session'] = self.sessions[chat_id] = session
-        update.message.reply_text(text=START_TXT)
+        update.message.reply_text(text=load_text('start'))
 
     # noinspection PyUnusedLocal
     class Session:
@@ -312,8 +303,7 @@ class SEMarathonBotSystem:
         def new_marathon(self, update: tg.Update, context: tge.CallbackContext):
             """Create new marathon"""
             self.marathon = mth.Marathon()
-            with open('text/new_marathon.txt') as text:
-                self.send_message(text=text.read().strip(), parse_mode=None)
+            self.send_message(text=load_text('new-marathon'), parse_mode=None)
 
         @cmdhandler()
         @marathon_method
@@ -473,7 +463,8 @@ class SEMarathonBotSystem:
 
         def check_marathon_created(self) -> None:
             if not self.marathon:
-                raise UsageError("Marathon not yet created", help_txt=MARATHON_NOT_CREATED_TXT)
+                raise UsageError("Marathon not yet created",
+                                 help_txt=load_text('marathon-not-created'))
 
         def check_marathon_running(self) -> None:
             if not self.marathon.is_running:
@@ -524,8 +515,7 @@ class SEMarathonBotSystem:
         def _status_text(self) -> str:
             if self.marathon.is_running:
                 elapsed, remaining = self.marathon.elapsed_remaining
-                with open('text/running_status.md') as text:
-                    return text.read().strip().format(elapsed, remaining)
+                return load_text('running-status').format(elapsed, remaining)
             else:
                 return "Marathon is not running"
 
