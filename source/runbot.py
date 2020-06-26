@@ -1,26 +1,15 @@
 import argparse
 import atexit
-import datetime
 import functools
 import logging
 import re
 
-from semarathon.persistence import load_jobs, save_jobs, save_jobs_job
 from semarathon.utils import load_text
 
 
 def start_bot(bot_system):
     logging.info("Starting bot")
     atexit.register(functools.partial(shutdown_bot, bot_system))
-    bot_system.job_queue.run_repeating(
-        callback=save_jobs_job, interval=datetime.timedelta(minutes=1)
-    )
-    try:
-        logging.info("Loading saved jobs")
-        load_jobs(bot_system.job_queue)
-    except FileNotFoundError:
-        logging.warning("No saved jobs found")
-
     bot_system.updater.start_polling()
     logging.info("Bot online")
 
@@ -32,7 +21,6 @@ def shutdown_bot(bot_system):
     for chat_id, session in sessions.copy().items():
         session.send_message("*SERVER SHUTDOWN* – Going to sleep with the fishes...")
         del sessions[chat_id]
-    save_jobs(bot_system.job_queue)
 
 
 def setup_logging(level):

@@ -13,7 +13,6 @@ from telegram.parsemode import ParseMode
 from semarathon import marathon as mth
 from semarathon.utils import *
 
-# TODO: fix jobqueue persistence
 # TODO: auto update command list to BotFather
 # TODO: use Markdown v2
 
