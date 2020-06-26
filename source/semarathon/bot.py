@@ -87,10 +87,11 @@ def _make_command_handler(
         try:
             # Build arguments list:
             args = [update, context]
+            bot_system = _get_bot_system(context)
             if callback_type == _CommandCallbackType.SESSION_METHOD:
-                args.insert(0, _get_session(context))
+                args.insert(0, _get_session(context, bot_system))
             elif callback_type == _CommandCallbackType.BOT_SYSTEM_METHOD:
-                args.insert(0, _get_bot_system(context))
+                args.insert(0, bot_system)
 
             # TODO: send typing action?
             # Actual call:
@@ -597,17 +598,20 @@ class SEMarathonBotSystem:
 # ------------------------------- Misc helpers  -------------------------------
 
 
-def _get_bot_system(context: tge.CallbackContext) -> "SEMarathonBotSystem":
+def _get_bot_system(context: tge.CallbackContext) -> SEMarathonBotSystem:
     try:
         return SEMarathonBotSystem._instances[context.bot.id]
     except KeyError:
         raise RuntimeError("Received an update destined for an uninitialised bot")
 
 
-def _get_session(context: tge.CallbackContext) -> "SEMarathonBotSystem.Session":
+def _get_session(
+    context: tge.CallbackContext, bot_system: SEMarathonBotSystem
+) -> SEMarathonBotSystem.Session:
     try:
-        # TODO: assert equal to sessions field
-        return context.chat_data["session"]
+        session = context.chat_data["session"]
+        assert session is bot_system.sessions[session.id]
+        return session
     except KeyError:
         raise UsageError(
             "Session not initialized",
