@@ -13,8 +13,6 @@ from telegram.utils.helpers import escape_markdown as esc_md
 from semarathon import marathon as mth
 from semarathon.utils import *
 
-# TODO: auto update command list to BotFather
-
 # logger setup
 logger = logging.getLogger(__name__)
 
@@ -114,10 +112,18 @@ def _make_command_handler(
     return handler
 
 
+def _extract_command_description(callback: Callable) -> str:
+    doc = callback.__doc__
+    if not doc:
+        raise ValueError(f"No command description found for callback {callback}")
+    return doc.strip().split("\n", maxsplit=1)[0]
+
+
 def cmdhandler(
     command: str = None,
     *,
     callback_type: _CommandCallbackType = _CommandCallbackType.SESSION_METHOD,
+    register: bool = True,
     **handler_kwargs,
 ) -> Decorator:
     """Parametrised decorator that marks a function as a callback for a command handler
@@ -125,18 +131,37 @@ def cmdhandler(
     :param command: name of bot command to add a handler for
     :param callback_type: type of callback ("standard" top-level function, bot system
                           method, or session method)
+    :param register: whether to register the command in the command list shown on
+                     Telegram clients. If set to ``True``, a ``command_info`` attribute
+                     is added to the callback function containing a BotCommand object,
+                     and a positive integer is assigned to ``callback.register``, in
+                     order of usage of this decorator.
+                     Otherwise ``callback.register`` is set to ```False``.
     :param handler_kwargs: additional keyword arguments for the
                            creation of the command handler (these will be passed
                            to ``telegram.ext.dispatcher.add_handler``)
 
-    :return: the decorated function, with the added ``command_handler`` attribute
+    :return: the decorated function, with the added ``command_handler`` and
+             (optionally) ``command_info`` attributes.
     """
 
     def decorator(callback: T) -> T:
+        command_ = command or callback.__name__
+
         handler = _make_command_handler(
-            callback, command, callback_type=callback_type, **handler_kwargs
+            callback, command_, callback_type=callback_type, **handler_kwargs,
         )
         callback.command_handler = handler
+        if register:
+            cmdhandler._counter = getattr(cmdhandler, "_counter", 0) + 1
+            # noinspection PyProtectedMember
+            callback.register = cmdhandler._counter
+            callback.command_info = tg.BotCommand(
+                command_, _extract_command_description(callback)
+            )
+        else:
+            callback.register = False
+
         return callback
 
     return decorator
@@ -239,12 +264,12 @@ class SEMarathonBotSystem:
     @staticmethod
     @cmdhandler(callback_type=_CommandCallbackType.FREE_FUNCTION)
     def info(update: tg.Update, context: tge.CallbackContext):
-        """Callback for /info: show info message"""
+        """General information about this bot and credits"""
         update.message.reply_markdown_v2(load_text("info"))
 
     @cmdhandler(callback_type=_CommandCallbackType.BOT_SYSTEM_METHOD)
     def start(self, update: tg.Update, context: tge.CallbackContext):
-        """Callback for /start: start session"""
+        """Start a session in the current chat (start listening for commands)"""
         chat_id = update.message.chat_id
         session = SEMarathonBotSystem.Session(self, chat_id)
         context.chat_data["session"] = self.sessions[chat_id] = session
@@ -288,52 +313,23 @@ class SEMarathonBotSystem:
 
         # -------------------------- Command handlers  --------------------------
 
-        def _shutdown(self):
-            # TODO: fix shutdown
-            self.marathon.destroy()
-            for job in self.bot_system.job_queue.jobs():
-                job.schedule_removal()
-            del self.bot_system.sessions[self.id]
-            self.send_message(
-                text="I'm now sleeping. Reactivate with /start.", parse_mode=None
-            )
-
-        @cmdhandler()
-        @require_confirmation(target=_shutdown)
-        def shutdown(self, update: tg.Update, context: tge.CallbackContext):
-            self.send_message("Shutting down...", parse_mode=None)
-
-        @cmdhandler()
-        @ongoing_operation_method
-        def yes(self, update: tg.Update, context: tge.CallbackContext):
-            self.operation.execute()
-
-        @cmdhandler()
-        @ongoing_operation_method
-        def no(self, update: tg.Update, context: tge.CallbackContext):
-            self.cancel(update)
-
-        @cmdhandler()
-        @ongoing_operation_method
-        def cancel(self, update: tg.Update, context: tge.CallbackContext):
-            self.send_message(f"Operation cancelled: `{self.operation.name}`")
-
         @cmdhandler()
         def new_marathon(self, update: tg.Update, context: tge.CallbackContext):
-            """Create new marathon"""
+            """Create a new marathon"""
             self.marathon = mth.Marathon()
             self.send_message(text=load_text("new-marathon"), parse_mode=None)
 
         @cmdhandler()
         @marathon_method
         def settings(self, update: tg.Update, context: tge.CallbackContext):
-            """Show settings"""
+            """View current settings for the marathon"""
             text = f"Current settings for marathon:\n\n{self._settings_text()}"
             self.send_message(text=text)
 
         @cmdhandler()
         @marathon_method
         def set_sites(self, update: tg.Update, context: tge.CallbackContext):
+            """Set the SE sites to be tracked during the marathon"""
             self.marathon.clear_sites()
             for site in context.args:
                 self.marathon.add_site(site)
@@ -344,7 +340,7 @@ class SEMarathonBotSystem:
         @cmdhandler()
         @marathon_method
         def add_participants(self, update: tg.Update, context: tge.CallbackContext):
-            """Add participants to marathon"""
+            """Add participants to the marathon"""
 
             def msg_lines(p: mth.Participant):
                 yield f"Added *{p.name}* to marathon:"
@@ -369,6 +365,7 @@ class SEMarathonBotSystem:
         @cmdhandler()
         @marathon_method
         def set_duration(self, update: tg.Update, context: tge.CallbackContext):
+            """Set the duration for the marathon"""
             args = context.args
             try:
                 hours, minutes = 0, 0
@@ -389,7 +386,9 @@ class SEMarathonBotSystem:
                 raise ArgValueError("Invalid duration given")
 
         @cmdhandler()
+        @marathon_method
         def schedule(self, update: tg.Update, context: tge.CallbackContext):
+            """Schedule the start of the marathon"""
             args = context.args
             try:
                 day, time_of_day = datetime.date.today(), datetime.time()
@@ -452,6 +451,7 @@ class SEMarathonBotSystem:
         @cmdhandler()
         @require_confirmation(target=_start_marathon)
         def start_marathon(self, update: tg.Update, context: tge.CallbackContext):
+            """Start the marathon"""
             text = (
                 f"Starting the marathon with the following settings:\n\n"
                 f"{self._settings_text()}"
@@ -461,28 +461,70 @@ class SEMarathonBotSystem:
         @cmdhandler()
         @marathon_method
         def status(self, update: tg.Update, context: tge.CallbackContext):
+            """Show the status of the current marathon"""
             self.send_message(text=self._status_text())
 
         @cmdhandler()
         @marathon_method
         def leaderboard(self, update: tg.Update, context: tge.CallbackContext):
+            """Show the leaderboard"""
             self.send_message(text=self._leaderboard_text())
 
         @cmdhandler()
         @running_marathon_method
         def time(self, update: tg.Update, context: tge.CallbackContext):
+            """Time remaining until the end of the marathon"""
             remaining = self.marathon.end_time - datetime.datetime.now()
             self.send_message(f"*Time remaining:* {esc_md(remaining, version=2)}")
 
         @cmdhandler()
+        @running_marathon_method
         def pause_marathon(self, update: tg.Update, context: tge.CallbackContext):
+            """Pause the marathon while it is running"""
             # TODO: implement pause_marathon
             raise NotImplementedError
 
         @cmdhandler()
         def stop_marathon(self, update: tg.Update, context: tge.CallbackContext):
+            """Stop the marathon prematurely"""
             # TODO: implement stop_marathon
             raise NotImplementedError
+
+        def _shutdown(self):
+            # TODO: fix shutdown
+            self.marathon.destroy()
+            for job in self.bot_system.job_queue.jobs():
+                job.schedule_removal()
+            del self.bot_system.sessions[self.id]
+            self.send_message(
+                text="I'm now sleeping. Reactivate with /start.", parse_mode=None
+            )
+
+        @cmdhandler()
+        @require_confirmation(target=_shutdown)
+        def shutdown(self, update: tg.Update, context: tge.CallbackContext):
+            """End the current session"""
+            self.send_message("Shutting down...", parse_mode=None)
+
+        # ----- Ongoing operation command callbacks  -----
+
+        @cmdhandler(register=False)
+        @ongoing_operation_method
+        def yes(self, update: tg.Update, context: tge.CallbackContext):
+            """Confirm an active operation"""
+            self.operation.execute()
+
+        @cmdhandler(register=False)
+        @ongoing_operation_method
+        def no(self, update: tg.Update, context: tge.CallbackContext):
+            """Cancel an active operation"""
+            self.cancel(update)
+
+        @cmdhandler(register=False)
+        @ongoing_operation_method
+        def cancel(self, update: tg.Update, context: tge.CallbackContext):
+            """Cancel an active operation"""
+            self.send_message(f"Operation cancelled: `{self.operation.name}`")
 
         # ------------------------------- Job callbacks  ----------------------------
 
@@ -593,11 +635,30 @@ class SEMarathonBotSystem:
         ]
 
     def _setup_handlers(self):
-        for callback in self._collect_command_callbacks():
+        callbacks = self._collect_command_callbacks()
+        for callback in callbacks:
             logger.debug(
                 f"Adding command handler for {callback.command_handler.command}"
             )
             self.dispatcher.add_handler(callback.command_handler)
+
+        cmd_list = [
+            callback.command_info
+            for callback in sorted(callbacks, key=lambda c: c.register)
+            if callback.register
+        ]
+        logger.debug(
+            f"Registering command list on Telegram: {[cmd.command for cmd in cmd_list]}"
+        )
+        self.bot.set_my_commands(cmd_list)
+
+
+# Hide decorators (as the're intended to be used only with the above class)
+del cmdhandler
+del marathon_method
+del running_marathon_method
+del ongoing_operation_method
+del require_confirmation
 
 
 # ------------------------------- Misc helpers  -------------------------------
