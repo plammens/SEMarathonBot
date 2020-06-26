@@ -468,10 +468,10 @@ class SEMarathonBotSystem:
             self.send_message(text=self._leaderboard_text())
 
         @cmdhandler()
-        @marathon_method
+        @running_marathon_method
         def time(self, update: tg.Update, context: tge.CallbackContext):
-            # TODO: implement time
-            raise NotImplementedError
+            remaining = self.marathon.end_time - datetime.datetime.now()
+            self.send_message(f"*Time remaining:* {remaining}")
 
         @cmdhandler()
         def pause_marathon(self, update: tg.Update, context: tge.CallbackContext):
