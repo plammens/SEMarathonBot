@@ -85,15 +85,15 @@ def _make_command_handler(
         command_info = f"/{command}@{update.effective_chat.id}"
         logger.info(f"reached {command_info}")
         try:
+            bot_system = _get_bot_system(context)
+
             # Build arguments list:
             args = [update, context]
-            bot_system = _get_bot_system(context)
             if callback_type == _CommandCallbackType.SESSION_METHOD:
                 args.insert(0, _get_session(context, bot_system))
             elif callback_type == _CommandCallbackType.BOT_SYSTEM_METHOD:
                 args.insert(0, bot_system)
 
-            # TODO: send typing action?
             # Actual call:
             callback(*args)
 

@@ -11,15 +11,18 @@ from semarathon.utils import load_text
 
 def start_bot(bot_system):
     logging.info("Starting bot")
+    atexit.register(functools.partial(shutdown_bot, bot_system))
     bot_system.job_queue.run_repeating(
         callback=save_jobs_job, interval=datetime.timedelta(minutes=1)
     )
     try:
+        logging.info("Loading saved jobs")
         load_jobs(bot_system.job_queue)
     except FileNotFoundError:
-        pass
+        logging.warning("No saved jobs found")
 
     bot_system.updater.start_polling()
+    logging.info("Bot online")
 
 
 def shutdown_bot(bot_system):
@@ -62,23 +65,20 @@ def setup_logging(level):
     root.addHandler(handler)
 
 
-def main(logging_level=logging.INFO):
-    setup_logging(logging_level)
-
+def construct_bot():
     logging.info("Initializing semarathon.bot module")
     from semarathon.bot import SEMarathonBotSystem
 
     logging.info("Initializing bot system")
-    se_marathon_bot_system = SEMarathonBotSystem(load_text("token"))
+    return SEMarathonBotSystem(load_text("token"))
 
-    logging.info("Starting bot")
-    atexit.register(functools.partial(shutdown_bot, se_marathon_bot_system))
+
+def main(logging_level=logging.INFO):
+    setup_logging(logging_level)
+    se_marathon_bot_system = construct_bot()
     start_bot(se_marathon_bot_system)
-    logging.info("Bot online")
-
     # run bot until interrupted:
     se_marathon_bot_system.updater.idle()
-
     shutdown_bot(se_marathon_bot_system)
 
 
