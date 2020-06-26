@@ -4,7 +4,7 @@ import functools
 import logging
 import re
 
-from semarathon.utils import load_text
+from semarathon.utils import Text
 
 
 def start_bot(bot_system):
@@ -58,7 +58,7 @@ def construct_bot():
     from semarathon.bot import SEMarathonBotSystem
 
     logging.info("Initializing bot system")
-    return SEMarathonBotSystem(load_text("token"))
+    return SEMarathonBotSystem(Text.load("token"))
 
 
 def main(logging_level=logging.INFO):

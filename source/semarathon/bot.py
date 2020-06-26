@@ -12,7 +12,7 @@ from telegram.parsemode import ParseMode
 from telegram.utils.helpers import escape_markdown as escape_md
 
 from semarathon import marathon as mth
-from semarathon.utils import Decorator, coroutine, format_exception_md, load_text
+from semarathon.utils import Decorator, Text, coroutine, format_exception_md
 
 # logger setup
 logger = logging.getLogger(__name__)
@@ -100,13 +100,13 @@ def _make_command_handler(
             logger.info(f"served {command_info}")
         except (UsageError, ValueError, mth.SEMarathonError) as e:
             text = (
-                f"{load_text('usage-error')}\n{format_exception_md(e)}\n\n"
+                f"{Text.load('usage-error')}\n{format_exception_md(e)}\n\n"
                 f"{escape_mdv2(getattr(e, 'help_txt', 'See /info for usage info'))}"
             )
             markdown_safe_reply(update.message, text)
             logger.info(f"served {command_info} (with usage/algorithm error)")
         except Exception as e:
-            text = f"{load_text('internal-error')}"
+            text = f"{Text.load('internal-error')}"
             markdown_safe_reply(update.message, text)
             logger.exception(f"{command_info}: unexpected exception", exc_info=e)
         finally:
@@ -269,7 +269,7 @@ class SEMarathonBotSystem:
     @cmdhandler(callback_type=_CommandCallbackType.FREE_FUNCTION)
     def info(update: tg.Update, context: tge.CallbackContext):
         """General information about this bot and credits"""
-        update.message.reply_markdown_v2(load_text("info"))
+        update.message.reply_markdown_v2(Text.load("info"))
 
     @cmdhandler(callback_type=_CommandCallbackType.BOT_SYSTEM_METHOD)
     def start(self, update: tg.Update, context: tge.CallbackContext):
@@ -277,7 +277,7 @@ class SEMarathonBotSystem:
         chat_id = update.message.chat_id
         session = SEMarathonBotSystem.Session(self, chat_id)
         context.chat_data["session"] = self.sessions[chat_id] = session
-        update.message.reply_text(text=load_text("start"))
+        update.message.reply_text(text=Text.load("start"))
 
     # noinspection PyUnusedLocal
     class Session:
@@ -321,7 +321,7 @@ class SEMarathonBotSystem:
         def new_marathon(self, update: tg.Update, context: tge.CallbackContext):
             """Create a new marathon"""
             self.marathon = mth.Marathon()
-            self.send_message(text=load_text("new-marathon"), parse_mode=None)
+            self.send_message(text=Text.load("new-marathon"))
 
         @cmdhandler()
         @marathon_method
@@ -552,7 +552,7 @@ class SEMarathonBotSystem:
             if not self.marathon:
                 raise UsageError(
                     "Marathon not yet created",
-                    help_txt=load_text("marathon-not-created"),
+                    help_txt=Text.load("marathon-not-created"),
                 )
 
         def check_marathon_running(self) -> None:
@@ -564,6 +564,15 @@ class SEMarathonBotSystem:
                 raise UsageError("No ongoing operation")
 
         def send_message(self, text, parse_mode=ParseMode.MARKDOWN_V2, **kwargs):
+            """Send a message to the chat to which this session is associated
+
+            :param text: text to send in the message
+            :param parse_mode: parse mode to use. If the `text` parameter has a
+                               ``parse_mode`` attribute, that is used instead and this
+                               parameter is ignored.
+            """
+            if hasattr(text, "parse_mode"):
+                parse_mode = text.parse_mode
             self.bot_system.bot.send_message(
                 chat_id=self.id, text=text, parse_mode=parse_mode, **kwargs
             )
@@ -605,7 +614,7 @@ class SEMarathonBotSystem:
         def _status_text(self) -> str:
             if self.marathon.is_running:
                 elapsed, remaining = self.marathon.elapsed_remaining
-                return load_text("running-status").format(
+                return Text.load("running-status").format(
                     elapsed=escape_mdv2(str(elapsed)),
                     remaining=escape_mdv2(str(remaining)),
                 )
