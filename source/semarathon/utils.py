@@ -2,24 +2,11 @@ import functools
 import threading
 from typing import Callable, TypeVar
 
-import telegram
 import telegram.ext.filters
 
 
 def debug_print(msg: str):
     print("\t".join(("[SEMB]", msg)))
-
-
-# TODO: move to bot.py with logging
-def markdown_safe_reply(original_message: telegram.Message, reply_txt: str):
-    """
-    Tries to reply to ``original_message`` in Markdown; falls back to plain text
-    if it can't be parsed correctly.
-    """
-    try:
-        original_message.reply_markdown(reply_txt)
-    except telegram.error.BadRequest:
-        original_message.reply_text(reply_txt)
 
 
 @functools.lru_cache

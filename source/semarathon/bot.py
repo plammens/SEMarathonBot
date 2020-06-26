@@ -613,3 +613,15 @@ def _get_session(context: tge.CallbackContext) -> "SEMarathonBotSystem.Session":
             "Session not initialized",
             help_txt="You must use /start before using other commands",
         )
+
+
+def markdown_safe_reply(original_message: telegram.Message, reply_txt: str):
+    """
+    Tries to reply to ``original_message`` in Markdown; falls back to plain text
+    if it can't be parsed correctly.
+    """
+    try:
+        original_message.reply_markdown(reply_txt)
+    except telegram.error.BadRequest as exc:
+        logger.exception("Failed to parse Markdown", exc_info=exc)
+        original_message.reply_text(reply_txt)
