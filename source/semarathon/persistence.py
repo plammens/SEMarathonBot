@@ -2,6 +2,7 @@ import pickle
 from threading import Event
 from time import time
 
+import telegram.ext as tge
 
 JOBS_PICKLE = "job_tuples.pickle"
 
@@ -61,5 +62,5 @@ def save_jobs(jq):
             job._enabled = _enabled
 
 
-def save_jobs_job(bot, job):
-    save_jobs(job.job_queue)
+def save_jobs_job(context: tge.CallbackContext):
+    save_jobs(context.job_queue)
