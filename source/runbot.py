@@ -3,6 +3,7 @@ import atexit
 import datetime
 import functools
 import logging
+import re
 
 from semarathon.persistence import load_jobs, save_jobs, save_jobs_job
 from semarathon.utils import load_text
@@ -31,11 +32,38 @@ def shutdown_bot(bot_system):
     save_jobs(bot_system.job_queue)
 
 
-def main(logging_level=logging.INFO):
-    # noinspection SpellCheckingInspection
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s:%(levelname)s - %(message)s", level=logging_level
+def setup_logging(level):
+    class CustomLogRecord(logging.LogRecord):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.origin = f"{self.name} ({self.threadName})"
+
+    class BotUpdaterFilter(logging.Filter):
+        PATT = re.compile(r"Bot:\d+:updater")
+
+        def filter(self, record: logging.LogRecord) -> int:
+            if record.threadName is None:
+                return True
+            else:
+                return not self.PATT.match(record.threadName)
+
+    logging.setLogRecordFactory(CustomLogRecord)
+    # noinspection SpellCheckingInspection,PyArgumentList
+
+    root = logging.getLogger()
+    root.setLevel(level)
+    # noinspection PyArgumentList
+    formatter = logging.Formatter(
+        fmt="{asctime} - {levelname:8} - {origin:50} - {message}", style="{",
     )
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    handler.addFilter(BotUpdaterFilter())
+    root.addHandler(handler)
+
+
+def main(logging_level=logging.INFO):
+    setup_logging(logging_level)
 
     logging.info("Initializing semarathon.bot module")
     from semarathon.bot import SEMarathonBotSystem

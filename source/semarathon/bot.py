@@ -17,6 +17,9 @@ from semarathon.utils import *
 # TODO: auto update command list to BotFather
 # TODO: use Markdown v2
 
+# logger setup
+logger = logging.getLogger(__name__)
+
 # type aliases
 CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
 CommandCallbackMethod = Callable[["BotSession", tg.Update, tge.CallbackContext], None]
@@ -80,7 +83,7 @@ def _make_command_handler(
     @functools.wraps(callback)
     def decorated(update: tg.Update, context: tge.CallbackContext):
         command_info = f"/{command}@{update.effective_chat.id}"
-        logging.info(f"reached {command_info}")
+        logger.info(f"reached {command_info}")
         try:
             # Build arguments list:
             args = [update, context]
@@ -93,20 +96,20 @@ def _make_command_handler(
             # Actual call:
             callback(*args)
 
-            logging.info(f"served {command_info}")
+            logger.info(f"served {command_info}")
         except (UsageError, ValueError, mth.SEMarathonError) as e:
             text = (
                 f"{load_text('usage-error')}\n{format_exception_md(e)}\n\n"
                 f"{esc_format(getattr(e, 'help_txt', 'See /info for usage info'))}"
             )
             markdown_safe_reply(update.message, text)
-            logging.info(f"served {command_info} (with usage/algorithm error)")
+            logger.info(f"served {command_info} (with usage/algorithm error)")
         except Exception as e:
             text = f"{load_text('internal-error')}"
             markdown_safe_reply(update.message, text)
-            logging.error(f"{command_info}: unexpected exception", exc_info=e)
+            logger.exception(f"{command_info}: unexpected exception", exc_info=e)
         finally:
-            logging.debug(f"exiting {command_info}")
+            logger.debug(f"exiting {command_info}")
 
     handler = tge.CommandHandler(command, decorated, **handler_kwargs)
     return handler
@@ -348,7 +351,10 @@ class SEMarathonBotSystem:
                 yield f"Added *{p.name}* to marathon:"
                 for site in self.marathon.sites:
                     user = p.user(site)
-                    yield f" - _{mth.SITES[site]['name']}_ : [user ID {user.id}]({user.link})"
+                    yield (
+                        f" - _{mth.SITES[site]['name']}_ : "
+                        f"[user ID {user.id}]({user.link})"
+                    )
                 yield ""
                 yield "Please verify the IDs are correct."
 
@@ -582,7 +588,7 @@ class SEMarathonBotSystem:
 
     def _setup_handlers(self):
         for callback in self._collect_command_callbacks():
-            logging.debug(
+            logger.debug(
                 f"Adding command handler for {callback.command_handler.command}"
             )
             self.dispatcher.add_handler(callback.command_handler)

@@ -10,6 +10,7 @@ def debug_print(msg: str):
     print("\t".join(("[SEMB]", msg)))
 
 
+# TODO: move to bot.py with logging
 def markdown_safe_reply(original_message: telegram.Message, reply_txt: str):
     """
     Tries to reply to ``original_message`` in Markdown; falls back to plain text
