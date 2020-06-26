@@ -423,7 +423,7 @@ class SEMarathonBotSystem:
 
         def _start_marathon(self):
             self.marathon.start(target=self._marathon_update_handler())
-            self.send_message("*_Alright, marathon has begun\!_*")
+            self.send_message(r"*_Alright, marathon has begun\!_*")
             self.bot_system.job_queue.run_repeating(
                 name="periodic updates",
                 callback=self.send_status_update,
@@ -572,7 +572,7 @@ class SEMarathonBotSystem:
             def lines():
                 yield self._sites_text()
                 yield self._participants_text()
-                yield f"*Duration*: {self.marathon.duration} \(_hh:mm:ss_\)"
+                yield rf"*Duration*: {self.marathon.duration} \(_hh:mm:ss_\)"
 
             return "\n\n".join(lines())
 
@@ -581,7 +581,7 @@ class SEMarathonBotSystem:
                 yield "*Sites*:"
                 for site in self.marathon.sites:
                     site_name_md = escape_mdv2(mth.SITES[site]["name"])
-                    yield f"\t \\- _{site_name_md}_"
+                    yield rf"\t \- _{site_name_md}_"
 
             return "\n".join(lines())
 
@@ -598,7 +598,7 @@ class SEMarathonBotSystem:
                 yield "LEADERBOARD\n"
                 participants = self.marathon.participants.values()
                 for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                    yield f"{i}\\. *{escape_mdv2(p)}* – {p.score} points"
+                    yield rf"{i}\. *{escape_mdv2(p)}* – {p.score} points"
 
             return "\n".join(lines())
 
