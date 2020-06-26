@@ -147,7 +147,6 @@ def cmdhandler(
 def marathon_method(method: Callable) -> Callable:
     @functools.wraps(method)
     def decorated_method(session: "SEMarathonBotSystem.Session", *args, **kwargs):
-        assert session.marathon is not None
         session.check_marathon_created()
         method(session, *args, **kwargs)
 
