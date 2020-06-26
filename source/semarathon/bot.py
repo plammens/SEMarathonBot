@@ -1,17 +1,18 @@
 import datetime
 import enum
+import functools
 import inspect
 import itertools
 import logging
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, Callable, ClassVar, Dict, Optional, TypeVar
 
 import telegram as tg
 import telegram.ext as tge
 from telegram.parsemode import ParseMode
-from telegram.utils.helpers import escape_markdown as esc_md
+from telegram.utils.helpers import escape_markdown as escape_md
 
 from semarathon import marathon as mth
-from semarathon.utils import *
+from semarathon.utils import Decorator, coroutine, format_exception_md, load_text
 
 # logger setup
 logger = logging.getLogger(__name__)
@@ -21,6 +22,9 @@ CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
 CommandCallbackMethod = Callable[["BotSession", tg.Update, tge.CallbackContext], None]
 BotSessionRunnable = Callable[["BotSession"], Any]
 T = TypeVar("T", CommandCallback, CommandCallbackMethod)
+
+# other aliases
+escape_mdv2 = functools.partial(escape_md, version=2)
 
 
 # ------------------------------- Exceptions  -------------------------------
@@ -97,7 +101,7 @@ def _make_command_handler(
         except (UsageError, ValueError, mth.SEMarathonError) as e:
             text = (
                 f"{load_text('usage-error')}\n{format_exception_md(e)}\n\n"
-                f"{esc_md(getattr(e, 'help_txt', 'See /info for usage info'), version=2)}"
+                f"{escape_mdv2(getattr(e, 'help_txt', 'See /info for usage info'))}"
             )
             markdown_safe_reply(update.message, text)
             logger.info(f"served {command_info} (with usage/algorithm error)")
@@ -347,7 +351,7 @@ class SEMarathonBotSystem:
                 for site in self.marathon.sites:
                     user = p.user(site)
                     yield (
-                        f" - _{esc_md(mth.SITES[site]['name'], version=2)}_ : "
+                        f" - _{escape_mdv2(mth.SITES[site]['name'])}_ : "
                         f"[user ID {user.id}]({user.link})"
                     )
                 yield ""
@@ -380,7 +384,7 @@ class SEMarathonBotSystem:
                     hours=hours, minutes=minutes
                 )
                 self.send_message(
-                    f"Set the duration to *{esc_md(duration, version=2)}* (_hh:mm:ss_ )"
+                    f"Set the duration to *{escape_mdv2(duration)}* (_hh:mm:ss_ )"
                 )
             except ValueError:
                 raise ArgValueError("Invalid duration given")
@@ -412,7 +416,7 @@ class SEMarathonBotSystem:
                     context=self.id,
                 )
                 self.send_message(
-                    f"Scheduled marathon start for *{esc_md(date_time, version=2)}*"
+                    f"Scheduled marathon start for *{escape_mdv2(date_time)}*"
                 )
             except ValueError:
                 raise ArgValueError("Invalid date/time given")
@@ -475,7 +479,7 @@ class SEMarathonBotSystem:
         def time(self, update: tg.Update, context: tge.CallbackContext):
             """Time remaining until the end of the marathon"""
             remaining = self.marathon.end_time - datetime.datetime.now()
-            self.send_message(f"*Time remaining:* {esc_md(remaining, version=2)}")
+            self.send_message(f"*Time remaining:* {escape_mdv2(remaining)}")
 
         @cmdhandler()
         @running_marathon_method
@@ -576,7 +580,7 @@ class SEMarathonBotSystem:
             def lines():
                 yield "*Sites*:"
                 for site in self.marathon.sites:
-                    site_name_md = esc_md(mth.SITES[site]["name"], version=2)
+                    site_name_md = escape_mdv2(mth.SITES[site]["name"])
                     yield f"\t \\- _{site_name_md}_"
 
             return "\n".join(lines())
@@ -594,7 +598,7 @@ class SEMarathonBotSystem:
                 yield "LEADERBOARD\n"
                 participants = self.marathon.participants.values()
                 for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                    yield f"{i}\\. *{esc_md(p, version=2)}* – {p.score} points"
+                    yield f"{i}\\. *{escape_mdv2(p)}* – {p.score} points"
 
             return "\n".join(lines())
 
@@ -602,8 +606,8 @@ class SEMarathonBotSystem:
             if self.marathon.is_running:
                 elapsed, remaining = self.marathon.elapsed_remaining
                 return load_text("running-status").format(
-                    elapsed=esc_md(str(elapsed), version=2),
-                    remaining=esc_md(str(remaining), version=2),
+                    elapsed=escape_mdv2(str(elapsed)),
+                    remaining=escape_mdv2(str(remaining)),
                 )
             else:
                 return "Marathon is not running"
@@ -618,7 +622,7 @@ class SEMarathonBotSystem:
                         yield f" _{mth.SITES[site]['name']}_  ({increment:+})"
 
                 text = (
-                    f"*{esc_md(update.participant, version=2)}* just gained "
+                    f"*{escape_mdv2(update.participant)}* just gained "
                     f"*{update.total:+}* reputation on {', '.join(per_site())}"
                 )
                 self.send_message(text)
@@ -685,7 +689,7 @@ def _get_session(
         )
 
 
-def markdown_safe_reply(original_message: telegram.Message, reply: str) -> tg.Message:
+def markdown_safe_reply(original_message: tg.Message, reply: str) -> tg.Message:
     """
     Tries to reply to ``original_message`` in Markdown; falls back to plain text
     if it can't be parsed correctly.
@@ -695,7 +699,7 @@ def markdown_safe_reply(original_message: telegram.Message, reply: str) -> tg.Me
     for mode in modes:
         try:
             return original_message.bot.send_message(chat_id, reply, parse_mode=mode)
-        except telegram.error.BadRequest as exc:
+        except tg.error.BadRequest as exc:
             logger.exception(f"Failed to parse as {mode.name}", exc_info=exc)
             continue
     return original_message.reply_text(reply)
