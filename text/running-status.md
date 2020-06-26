@@ -1,3 +1,3 @@
-Marathon is running.
-_Time elapsed_ : {}
-_Time remaining_ : {}
+Marathon is running\.
+_Time elapsed_ : {elapsed}
+_Time remaining_ : {remaining}

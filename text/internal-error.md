@@ -1,3 +1,3 @@
-😱 *PANIC!!!* 😱
-PLEASE, DAVE, I'M SCARED... DON'T DO THAT...
-_(Internal Error)_
+😱 *PANIC\!\!\!* 😱
+PLEASE, DAVE, I'M SCARED\.\.\. DON'T DO THAT\.\.\.
+_\(Internal Error\)_

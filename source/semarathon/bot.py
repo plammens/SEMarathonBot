@@ -7,14 +7,13 @@ from typing import Any, ClassVar, Dict, Optional
 
 import telegram as tg
 import telegram.ext as tge
-from markdown_strings import esc_format
 from telegram.parsemode import ParseMode
+from telegram.utils.helpers import escape_markdown as esc_md
 
 from semarathon import marathon as mth
 from semarathon.utils import *
 
 # TODO: auto update command list to BotFather
-# TODO: use Markdown v2
 
 # logger setup
 logger = logging.getLogger(__name__)
@@ -100,7 +99,7 @@ def _make_command_handler(
         except (UsageError, ValueError, mth.SEMarathonError) as e:
             text = (
                 f"{load_text('usage-error')}\n{format_exception_md(e)}\n\n"
-                f"{esc_format(getattr(e, 'help_txt', 'See /info for usage info'))}"
+                f"{esc_md(getattr(e, 'help_txt', 'See /info for usage info'), version=2)}"
             )
             markdown_safe_reply(update.message, text)
             logger.info(f"served {command_info} (with usage/algorithm error)")
@@ -241,7 +240,7 @@ class SEMarathonBotSystem:
     @cmdhandler(callback_type=_CommandCallbackType.FREE_FUNCTION)
     def info(update: tg.Update, context: tge.CallbackContext):
         """Callback for /info: show info message"""
-        update.message.reply_markdown(load_text("info"))
+        update.message.reply_markdown_v2(load_text("info"))
 
     @cmdhandler(callback_type=_CommandCallbackType.BOT_SYSTEM_METHOD)
     def start(self, update: tg.Update, context: tge.CallbackContext):
@@ -290,6 +289,7 @@ class SEMarathonBotSystem:
         # -------------------------- Command handlers  --------------------------
 
         def _shutdown(self):
+            # TODO: fix shutdown
             self.marathon.destroy()
             for job in self.bot_system.job_queue.jobs():
                 job.schedule_removal()
@@ -301,7 +301,7 @@ class SEMarathonBotSystem:
         @cmdhandler()
         @require_confirmation(target=_shutdown)
         def shutdown(self, update: tg.Update, context: tge.CallbackContext):
-            self.send_message("Shutting down...")
+            self.send_message("Shutting down...", parse_mode=None)
 
         @cmdhandler()
         @ongoing_operation_method
@@ -351,7 +351,7 @@ class SEMarathonBotSystem:
                 for site in self.marathon.sites:
                     user = p.user(site)
                     yield (
-                        f" - _{mth.SITES[site]['name']}_ : "
+                        f" - _{esc_md(mth.SITES[site]['name'], version=2)}_ : "
                         f"[user ID {user.id}]({user.link})"
                     )
                 yield ""
@@ -379,11 +379,11 @@ class SEMarathonBotSystem:
                 else:
                     raise ArgCountError("Expected one or two argument")
 
-                self.marathon.duration = datetime.timedelta(
+                self.marathon.duration = duration = datetime.timedelta(
                     hours=hours, minutes=minutes
                 )
                 self.send_message(
-                    f"Set the duration to *{self.marathon.duration}* (_hh:mm:ss_ )"
+                    f"Set the duration to *{esc_md(duration, version=2)}* (_hh:mm:ss_ )"
                 )
             except ValueError:
                 raise ArgValueError("Invalid duration given")
@@ -412,13 +412,15 @@ class SEMarathonBotSystem:
                     when=date_time,
                     context=self.id,
                 )
-                self.send_message(f"Scheduled marathon start for *{date_time}*")
+                self.send_message(
+                    f"Scheduled marathon start for *{esc_md(date_time, version=2)}*"
+                )
             except ValueError:
                 raise ArgValueError("Invalid date/time given")
 
         def _start_marathon(self):
             self.marathon.start(target=self._marathon_update_handler())
-            self.send_message("*_Alright, marathon has begun!_*")
+            self.send_message("*_Alright, marathon has begun\!_*")
             self.bot_system.job_queue.run_repeating(
                 name="periodic updates",
                 callback=self.send_status_update,
@@ -470,7 +472,7 @@ class SEMarathonBotSystem:
         @running_marathon_method
         def time(self, update: tg.Update, context: tge.CallbackContext):
             remaining = self.marathon.end_time - datetime.datetime.now()
-            self.send_message(f"*Time remaining:* {remaining}")
+            self.send_message(f"*Time remaining:* {esc_md(remaining, version=2)}")
 
         @cmdhandler()
         def pause_marathon(self, update: tg.Update, context: tge.CallbackContext):
@@ -515,7 +517,7 @@ class SEMarathonBotSystem:
             if self.operation is None:
                 raise UsageError("No ongoing operation")
 
-        def send_message(self, text, parse_mode=ParseMode.MARKDOWN, **kwargs):
+        def send_message(self, text, parse_mode=ParseMode.MARKDOWN_V2, **kwargs):
             self.bot_system.bot.send_message(
                 chat_id=self.id, text=text, parse_mode=parse_mode, **kwargs
             )
@@ -524,7 +526,7 @@ class SEMarathonBotSystem:
             def lines():
                 yield self._sites_text()
                 yield self._participants_text()
-                yield f"*Duration*: {self.marathon.duration} (_hh:mm:ss_)"
+                yield f"*Duration*: {self.marathon.duration} \(_hh:mm:ss_\)"
 
             return "\n\n".join(lines())
 
@@ -532,16 +534,16 @@ class SEMarathonBotSystem:
             def lines():
                 yield "*Sites*:"
                 for site in self.marathon.sites:
-                    yield f"\t - _{mth.SITES[site]['name']}_"
+                    site_name_md = esc_md(mth.SITES[site]["name"], version=2)
+                    yield f"\t \\- _{site_name_md}_"
 
             return "\n".join(lines())
 
         def _participants_text(self) -> str:
             # TODO: fix participants text
             def lines():
-                yield "*Sites*:"
-                for site in self.marathon.sites:
-                    yield f"\t - {mth.SITES[site]['name']}"
+                yield "*Participants*:"
+                yield ""
 
             return "\n".join(lines())
 
@@ -550,14 +552,17 @@ class SEMarathonBotSystem:
                 yield "LEADERBOARD\n"
                 participants = self.marathon.participants.values()
                 for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                    yield f"{i}. *{p}* – {p.score} points"
+                    yield f"{i}\\. *{esc_md(p, version=2)}* – {p.score} points"
 
             return "\n".join(lines())
 
         def _status_text(self) -> str:
             if self.marathon.is_running:
                 elapsed, remaining = self.marathon.elapsed_remaining
-                return load_text("running-status").format(elapsed, remaining)
+                return load_text("running-status").format(
+                    elapsed=esc_md(str(elapsed), version=2),
+                    remaining=esc_md(str(remaining), version=2),
+                )
             else:
                 return "Marathon is not running"
 
@@ -570,8 +575,10 @@ class SEMarathonBotSystem:
                     for site, increment in update.per_site.items():
                         yield f" _{mth.SITES[site]['name']}_  ({increment:+})"
 
-                text = f"*{update.participant}* just gained *{update.total:+}* reputation on"
-                text += ", ".join(per_site())
+                text = (
+                    f"*{esc_md(update.participant, version=2)}* just gained "
+                    f"*{update.total:+}* reputation on {', '.join(per_site())}"
+                )
                 self.send_message(text)
 
     @classmethod
@@ -617,13 +624,17 @@ def _get_session(
         )
 
 
-def markdown_safe_reply(original_message: telegram.Message, reply_txt: str):
+def markdown_safe_reply(original_message: telegram.Message, reply: str) -> tg.Message:
     """
     Tries to reply to ``original_message`` in Markdown; falls back to plain text
     if it can't be parsed correctly.
     """
-    try:
-        original_message.reply_markdown(reply_txt)
-    except telegram.error.BadRequest as exc:
-        logger.exception("Failed to parse Markdown", exc_info=exc)
-        original_message.reply_text(reply_txt)
+    chat_id = original_message.chat_id
+    modes = [ParseMode.MARKDOWN_V2, ParseMode.MARKDOWN]
+    for mode in modes:
+        try:
+            return original_message.bot.send_message(chat_id, reply, parse_mode=mode)
+        except telegram.error.BadRequest as exc:
+            logger.exception(f"Failed to parse as {mode.name}", exc_info=exc)
+            continue
+    return original_message.reply_text(reply)
