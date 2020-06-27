@@ -1,4 +1,5 @@
 import datetime
+import functools
 import json
 import time
 from typing import Dict, Generator, List, Optional, Tuple
@@ -10,50 +11,6 @@ from semarathon.utils import StoppableThread
 with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
 DEFAULT_SITES = ("stackoverflow", "math", "tex")
-APIS = {name: stackapi.StackAPI(name) for name in DEFAULT_SITES}
-
-
-def get_api(site: str):
-    if site not in APIS:
-        APIS[site] = stackapi.StackAPI(site)
-    return APIS[site]
-
-
-class SEMarathonError(Exception):
-    pass
-
-
-class UserError(SEMarathonError, LookupError):
-    def __init__(self, user: "Participant.UserProfile"):
-        self.user = user
-
-    @property
-    def site(self):
-        return self.user.site
-
-
-class UserNotFoundError(UserError):
-    def __str__(self):
-        return "User {} not found at {}".format(
-            self.user.name, SITES[self.user.site]["name"]
-        )
-
-
-class MultipleUsersFoundError(UserError):
-    def __str__(self):
-        return "Multiple candidates found for user '{}' at {}".format(
-            self.user.name, SITES[self.user.site]["name"]
-        )
-
-
-class SiteError(SEMarathonError, LookupError):
-    def __init__(self, site):
-        self.site = site
-
-
-class SiteNotFoundError(SiteError):
-    def __str__(self):
-        return "Site '{}' not found on SE network".format(self.site)
 
 
 class Participant:
@@ -223,3 +180,51 @@ class Marathon:
         if self.is_running:
             self.poll_thread.stop()
             self.poll_thread.join()
+
+
+# ------------------------------- Exceptions  -------------------------------
+
+
+class SEMarathonError(Exception):
+    pass
+
+
+class UserError(SEMarathonError, LookupError):
+    def __init__(self, user: "Participant.UserProfile"):
+        self.user = user
+
+    @property
+    def site(self):
+        return self.user.site
+
+
+class UserNotFoundError(UserError):
+    def __str__(self):
+        return "User {} not found at {}".format(
+            self.user.name, SITES[self.user.site]["name"]
+        )
+
+
+class MultipleUsersFoundError(UserError):
+    def __str__(self):
+        return "Multiple candidates found for user '{}' at {}".format(
+            self.user.name, SITES[self.user.site]["name"]
+        )
+
+
+class SiteError(SEMarathonError, LookupError):
+    def __init__(self, site):
+        self.site = site
+
+
+class SiteNotFoundError(SiteError):
+    def __str__(self):
+        return "Site '{}' not found on SE network".format(self.site)
+
+
+# ------------------------------- Misc helpers  -------------------------------
+
+
+@functools.lru_cache
+def get_api(site: str) -> stackapi.StackAPI:
+    return stackapi.StackAPI(site)

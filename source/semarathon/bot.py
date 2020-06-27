@@ -27,25 +27,6 @@ T = TypeVar("T", CommandCallback, CommandCallbackMethod)
 escape_mdv2 = functools.partial(escape_md, version=2)
 
 
-# ------------------------------- Exceptions  -------------------------------
-
-
-class UsageError(Exception):
-    help_txt: str
-
-    def __init__(self, *args, help_txt: str = None):
-        super(UsageError, self).__init__(*args)
-        self.help_txt = help_txt or "See /info for usage info"
-
-
-class ArgValueError(UsageError, ValueError):
-    pass
-
-
-class ArgCountError(UsageError):
-    pass
-
-
 # ------------------------------- Decorators  -------------------------------
 
 
@@ -672,6 +653,25 @@ del marathon_method
 del running_marathon_method
 del ongoing_operation_method
 del require_confirmation
+
+
+# ------------------------------- Exceptions  -------------------------------
+
+
+class UsageError(Exception):
+    help_txt: str
+
+    def __init__(self, *args, help_txt: str = None):
+        super(UsageError, self).__init__(*args)
+        self.help_txt = help_txt or "See /info for usage info"
+
+
+class ArgValueError(UsageError, ValueError):
+    pass
+
+
+class ArgCountError(UsageError):
+    pass
 
 
 # ------------------------------- Misc helpers  -------------------------------
