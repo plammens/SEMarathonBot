@@ -2,7 +2,7 @@ import datetime
 import functools
 import json
 import time
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Dict, Generator, Iterator, List, Optional, Tuple
 
 import stackapi
 
@@ -102,7 +102,6 @@ class Marathon:
     duration: datetime.timedelta
     start_time: Optional[datetime.datetime]
     end_time: Optional[datetime.datetime]
-    poll_thread: Optional[StoppableThread]
 
     def __init__(self, *sites: str):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
@@ -110,7 +109,7 @@ class Marathon:
         self.duration = datetime.timedelta(hours=12)
         self.start_time = None
         self.end_time = None
-        self.poll_thread = None
+        self._poll_thread = None
 
     @property
     def elapsed_remaining(self) -> Tuple[datetime.timedelta, datetime.timedelta]:
@@ -136,7 +135,7 @@ class Marathon:
 
     @property
     def is_running(self) -> bool:
-        return self.poll_thread is not None and not self.poll_thread.stopped
+        return self._poll_thread is not None and not self._poll_thread.stopped
 
     def add_site(self, site: str):
         if site not in SITES:
@@ -153,7 +152,7 @@ class Marathon:
         p.fetch_users(*self.sites)
         self.participants[username] = p
 
-    def poll(self):
+    def poll(self) -> Iterator[Update]:
         for participant in self.participants.values():
             update = Update(participant)
             for site in self.sites:
@@ -173,13 +172,15 @@ class Marathon:
                     target.send(update)
                 time.sleep(10)
 
-        self.poll_thread = StoppableThread(name="MarathonPoll", target=run, daemon=True)
-        self.poll_thread.start()
+        self._poll_thread = StoppableThread(
+            name="MarathonPoll", target=run, daemon=True
+        )
+        self._poll_thread.start()
 
     def destroy(self):
         if self.is_running:
-            self.poll_thread.stop()
-            self.poll_thread.join()
+            self._poll_thread.stop()
+            self._poll_thread.join()
 
 
 # ------------------------------- Exceptions  -------------------------------
@@ -212,12 +213,12 @@ class MultipleUsersFoundError(UserError):
         )
 
 
-class SiteError(SEMarathonError, LookupError):
+class SiteError(SEMarathonError):
     def __init__(self, site):
         self.site = site
 
 
-class SiteNotFoundError(SiteError):
+class SiteNotFoundError(SiteError, LookupError):
     def __str__(self):
         return "Site '{}' not found on SE network".format(self.site)
 
