@@ -211,6 +211,8 @@ def require_confirmation(
 
 # ------------------------------- BotSession  -------------------------------
 
+# TODO: split command handlers into core functionality and side effect
+
 
 class SEMarathonBotSystem:
     """
@@ -253,12 +255,13 @@ class SEMarathonBotSystem:
         update.message.reply_markdown_v2(Text.load("info"))
 
     @cmdhandler(callback_type=_CommandCallbackType.BOT_SYSTEM_METHOD)
-    def start(self, update: tg.Update, context: tge.CallbackContext):
+    def start(self, update: tg.Update, context: tge.CallbackContext) -> "Session":
         """Start a session in the current chat (start listening for commands)"""
         chat_id = update.message.chat_id
         session = SEMarathonBotSystem.Session(self, chat_id)
         context.chat_data["session"] = self.sessions[chat_id] = session
         update.message.reply_text(text=Text.load("start"))
+        return session
 
     # noinspection PyUnusedLocal
     class Session:
@@ -299,10 +302,13 @@ class SEMarathonBotSystem:
         # -------------------------- Command handlers  --------------------------
 
         @cmdhandler()
-        def new_marathon(self, update: tg.Update, context: tge.CallbackContext):
+        def new_marathon(
+            self, update: tg.Update, context: tge.CallbackContext
+        ) -> mth.Marathon:
             """Create a new marathon"""
             self.marathon = mth.Marathon()
             self.send_message(text=Text.load("new-marathon"))
+            return self.marathon
 
         @cmdhandler()
         @marathon_method
@@ -455,10 +461,13 @@ class SEMarathonBotSystem:
 
         @cmdhandler()
         @running_marathon_method
-        def time(self, update: tg.Update, context: tge.CallbackContext):
+        def time(
+            self, update: tg.Update, context: tge.CallbackContext
+        ) -> datetime.timedelta:
             """Time remaining until the end of the marathon"""
             remaining = self.marathon.end_time - datetime.datetime.now()
             self.send_message(f"*Time remaining:* {escape_mdv2(remaining)}")
+            return remaining
 
         @cmdhandler()
         @running_marathon_method
