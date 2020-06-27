@@ -332,18 +332,16 @@ class SEMarathonBotSystem:
                 for site in self.marathon.sites:
                     user = p.user(site)
                     yield (
-                        f" - _{escape_mdv2(mth.SITES[site]['name'])}_ : "
+                        rf" \- _{escape_mdv2(mth.SITES[site]['name'])}_ : "
                         f"[user ID {user.id}]({user.link})"
                     )
                 yield ""
-                yield "Please verify the IDs are correct."
+                yield r"Please verify the IDs are correct\."
 
             for username in context.args:
                 self.marathon.add_participant(username)
-                self.send_message(
-                    text="\n".join(msg_lines(self.marathon.participants[username])),
-                    disable_web_page_preview=True,
-                )
+                text = "\n".join(msg_lines(self.marathon.participants[username]))
+                self.send_message(text=text, disable_web_page_preview=True)
 
         # TODO: remove participant
 
