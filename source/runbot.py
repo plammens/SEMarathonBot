@@ -19,7 +19,9 @@ def shutdown_bot(bot_system):
     bot_system.updater.stop()
     sessions = bot_system.sessions
     for chat_id, session in sessions.copy().items():
-        session.send_message("*SERVER SHUTDOWN* – Going to sleep with the fishes...")
+        session.send_message(
+            "*SERVER SHUTDOWN* – Going to sleep with the fishes...", parse_mode=None
+        )
         del sessions[chat_id]
 
 
