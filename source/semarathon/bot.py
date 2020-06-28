@@ -231,6 +231,7 @@ class SEMarathonBotSystem:
     updater: tge.Updater
     dispatcher: tge.Dispatcher
     job_queue: tge.JobQueue
+    # TODO: make sessions delegate to chat data
     sessions: Dict[int, "SEMarathonBotSystem.Session"]
 
     def __init__(self, token: str, **kwargs):
@@ -408,7 +409,7 @@ class SEMarathonBotSystem:
                 raise ArgValueError("Invalid date/time given")
 
         def _start_marathon(self):
-            self.marathon.start(target=self._marathon_update_handler())
+            self.marathon.start(handler=self._marathon_update_handler())
             self.send_message(r"*_Alright, marathon has begun\!_*")
             self.bot_system.job_queue.run_repeating(
                 name="periodic updates",
@@ -480,8 +481,8 @@ class SEMarathonBotSystem:
         @cmdhandler()
         def stop_marathon(self, update: tg.Update, context: tge.CallbackContext):
             """Stop the marathon prematurely"""
-            # TODO: implement stop_marathon
-            raise NotImplementedError
+            self.marathon.stop()
+            assert not self.marathon.is_running
 
         def _shutdown(self):
             self.marathon.stop()
@@ -561,7 +562,7 @@ class SEMarathonBotSystem:
             """
             if hasattr(text, "parse_mode"):
                 parse_mode = text.parse_mode
-            self.bot_system.bot.send_message(
+            return self.bot_system.bot.send_message(
                 chat_id=self.id, text=text, parse_mode=parse_mode, **kwargs
             )
 
@@ -610,19 +611,35 @@ class SEMarathonBotSystem:
                 return "Marathon is not running"
 
         @coroutine
-        def _marathon_update_handler(self):
-            while True:
-                update: mth.Update = (yield)
+        def _marathon_update_handler(self) -> Generator[None, mth.Update, None]:
+            try:
+                while True:
+                    update = yield
+                    per_site = ", ".join(
+                        f" _{mth.SITES[site]['name']}_  ({increment:+})"
+                        for site, increment in update.per_site.items()
+                    )
+                    text = (
+                        f"*{escape_mdv2(update.participant)}* just gained "
+                        f"*{update.total:+}* reputation on {per_site}"
+                    )
+                    self.send_message(text)
+            except GeneratorExit:
+                # marathon has stopped (either at the scheduled time or prematurely)
+                self._marathon_end_summary()
 
-                def per_site():
-                    for site, increment in update.per_site.items():
-                        yield f" _{mth.SITES[site]['name']}_  ({increment:+})"
+        def _marathon_end_summary(self):
+            self.send_message(r"_*Marathon has ended\!*_")
+            scores = self.marathon.participants
+            winner, _ = max(scores.items(), key=lambda k, v: v, default=(None,) * 2)
+            self._send_winner(winner)
+            self.send_message(self._leaderboard_text())
 
-                text = (
-                    f"*{escape_mdv2(update.participant)}* just gained "
-                    f"*{update.total:+}* reputation on {', '.join(per_site())}"
-                )
-                self.send_message(text)
+        def _send_winner(self, winner):
+            lines = (f"And the winner is\\.\\.\\.", f"🎉🎉 *{winner}* 🎉🎉")
+            message = self.send_message(lines[0])
+            time.sleep(1)
+            message.edit_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
 
     @classmethod
     def _collect_command_callbacks(cls):

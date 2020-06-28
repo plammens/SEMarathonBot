@@ -176,19 +176,20 @@ class Marathon:
             if update:
                 yield update
 
-    def start(self, target: Generator[None, Update, None]):
+    def start(self, handler: Generator[None, Update, None]):
         """Start the marathon in a separate thread
 
         Creates a new thread that polls the Stack Exchange API
 
-        :param target: coroutine to which updates will be sent
+        :param handler: coroutine to which updates will be sent
         """
         timeout = self.refresh_interval.total_seconds()
 
         def run():
             while not self._poll_thread.stop_event.wait(timeout=timeout):
                 for update in self.poll():
-                    target.send(update)
+                    handler.send(update)
+            handler.close()
 
         self.start_time = datetime.datetime.now()
         self.end_time = self.start_time + self.duration
