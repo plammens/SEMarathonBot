@@ -616,7 +616,7 @@ class SEMarathonBotSystem:
             try:
                 while True:
                     update = yield
-                    logger.debug(f"Received a marathon update for {update.user}")
+                    logger.debug(f"Received a marathon update for {update.participant}")
                     per_site = ", ".join(
                         f" _{mth.SITES[site]['name']}_  ({increment:+})"
                         for site, increment in update.per_site.items()
