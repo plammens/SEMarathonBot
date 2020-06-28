@@ -509,7 +509,7 @@ class SEMarathonBotSystem:
         @ongoing_operation_method
         def no(self, update: tg.Update, context: tge.CallbackContext):
             """Cancel an active operation"""
-            self.cancel(update)
+            self.cancel(update, context)
 
         @cmdhandler(register=False)
         @ongoing_operation_method
