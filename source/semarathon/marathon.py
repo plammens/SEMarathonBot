@@ -1,6 +1,7 @@
 import datetime
 import functools
 import json
+import logging
 import time
 from typing import Dict, Generator, Iterator, List, Optional, Tuple, Union
 
@@ -11,6 +12,8 @@ from semarathon.utils import TimedStoppableThread
 with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
 DEFAULT_SITES = ("stackoverflow", "math", "tex")
+
+logger = logging.getLogger(__name__)
 
 
 class Participant:
@@ -186,9 +189,11 @@ class Marathon:
         timeout = self.refresh_interval.total_seconds()
 
         def run():
+            logger.info("Marathon thread started")
             while not self._poll_thread.stop_event.wait(timeout=timeout):
                 for update in self.poll():
                     handler.send(update)
+            logger.info("Ending marathon thread")
             handler.close()
 
         self.start_time = datetime.datetime.now()
@@ -200,8 +205,11 @@ class Marathon:
 
     def stop(self):
         if self.is_running:
+            logger.debug("Stopping marathon")
             self._poll_thread.stop()
             self._poll_thread.join()
+        else:
+            logger.warning("Tried to stop a marathon that isn't running")
 
 
 # ------------------------------- Exceptions  -------------------------------

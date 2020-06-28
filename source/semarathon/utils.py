@@ -1,7 +1,8 @@
 import datetime
 import functools
+import logging
 import threading
-from typing import Callable, TypeVar, Union
+from typing import Callable, ClassVar, TypeVar, Union
 
 import telegram as tg
 import telegram.ext.filters
@@ -79,12 +80,15 @@ class StoppableThread(threading.Thread):
     """Thread class with a stop() method. The thread itself has to check
     regularly for the stopped() condition."""
 
+    logger: ClassVar[logging.Logger] = logging.getLogger("threading")
+
     def __init__(self, *args, **kwargs):
         super(StoppableThread, self).__init__(*args, **kwargs)
         self.stop_event = threading.Event()
 
     def stop(self):
         self.stop_event.set()
+        self.logger.debug(f"stop_event set for thread {self}")
 
     @property
     def stopped(self):
@@ -101,6 +105,7 @@ class TimedStoppableThread(StoppableThread):
     def run(self) -> None:
         self.timer.start()
         super().run()
+        self.logger.debug(f"End of thread {self}")
 
     def stop(self):
         super(TimedStoppableThread, self).stop()

@@ -17,6 +17,7 @@ from semarathon.utils import Decorator, Text, coroutine, format_exception_md
 
 # logger setup
 logger = logging.getLogger(__name__)
+del logging  # to avoid mistakes with code completion
 
 # type aliases
 CommandCallback = Callable[[tg.Update, tge.CallbackContext], None]
@@ -615,6 +616,7 @@ class SEMarathonBotSystem:
             try:
                 while True:
                     update = yield
+                    logger.debug(f"Received a marathon update for {update.user}")
                     per_site = ", ".join(
                         f" _{mth.SITES[site]['name']}_  ({increment:+})"
                         for site, increment in update.per_site.items()
@@ -626,6 +628,7 @@ class SEMarathonBotSystem:
                     self.send_message(text)
             except GeneratorExit:
                 # marathon has stopped (either at the scheduled time or prematurely)
+                logger.debug("Notifying chat of end of marathon")
                 self._marathon_end_summary()
 
         def _marathon_end_summary(self):
