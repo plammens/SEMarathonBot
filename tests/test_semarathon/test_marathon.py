@@ -38,14 +38,16 @@ def mock_target():
 class TestMarathon:
     def test_init_noArgs_defaultSites(self):
         marathon = mth.Marathon()
-        assert marathon.sites == ["stackoverflow", "math", "tex"]
+        assert set(marathon.sites) == set(mth.DEFAULT_SITES_KEYS)
 
     @pytest.mark.parametrize(
         "sites", argvalues=[random.choices(SITE_NAMES, k=10) for _ in range(3)]
     )
     def test_init_sitesList_getRegistered(self, sites):
         marathon = mth.Marathon(*sites)
-        assert marathon.sites == sites
+        assert set(marathon.sites) == set(sites)
+        for site in sites:
+            assert marathon.sites[site].domain in SITES[site]["site_url"]
 
     @pytest.mark.parametrize("sites", argvalues=[[], random.choices(SITE_NAMES, k=10)])
     def test_init_any_validInitialState(self, sites):

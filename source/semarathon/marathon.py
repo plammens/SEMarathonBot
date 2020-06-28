@@ -2,16 +2,17 @@ import datetime
 import functools
 import json
 import logging
-import time
-from typing import Dict, Generator, Iterator, List, Optional, Tuple, Union
+import re
+from typing import Dict, Generator, Iterator, Mapping, Optional, Tuple, Union
 
-import stackapi
+import stackexchange
 
-from semarathon.utils import TimedStoppableThread
+from semarathon.utils import ReadOnlyDictView, Text, TimedStoppableThread
 
 with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
-DEFAULT_SITES = ("stackoverflow", "math", "tex")
+DEFAULT_SITES_KEYS = ("stackoverflow", "math", "tex")
+SE_APP_KEY = Text.load("se-app-key")
 
 logger = logging.getLogger(__name__)
 
@@ -19,65 +20,59 @@ logger = logging.getLogger(__name__)
 class Participant:
     name: str
 
-    class UserProfile:
-        link: str
-        last_checked: int
-
-        def __init__(self, site: str, username: str):
-            self.site = site
-            self.name = username
-
-            results = get_api(site).fetch(
-                "users",
-                inname=username,
-                sort="name",
-                order="desc",
-                min=username,
-                max=username,
-            )["items"]
-            if not results:
-                raise UserNotFoundError(self)
-            elif len(results) > 1:
-                raise MultipleUsersFoundError(self)
-            user_data = results[0]
-
-            self.id = user_data["user_id"]
-            self.link = SITES[site]["site_url"] + "/users/{}/".format(self.id)
-            self.last_checked = int(time.time())
-            self.score = 0
-
-        def update(self) -> bool:
-            results = get_api(self.site).fetch(
-                "users/{}/reputation".format(self.id), fromdate=self.last_checked
-            )
-            updates = results["items"]
-            if updates:
-                self.last_checked = updates[0]["on_date"] + 1
-            increment = sum(u["reputation_change"] for u in updates)
-            return bool(increment)
-
     def __init__(self, username: str):
         self.name = username
         self._users: Dict[str, Participant.UserProfile] = {}
+        self._score = 0
 
     def __str__(self):
         return self.name
 
     @property
     def score(self):
-        return sum(u.score for u in self._users.values())
+        return self._score
 
-    def user(self, site: str):
+    class UserProfile(stackexchange.User):
+        site: stackexchange.Site
+        id: int
+
+        score: int
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.score = 0
+            self._last_checked = datetime.datetime.now()
+
+        @property
+        def link(self):
+            return f"{self.site.domain}/users/{self.id}/"
+
+        def update(self) -> int:
+            updates = self.reputation_detail.fetch(
+                fromdate=int(self._last_checked.timestamp())
+            )
+            if len(updates) > 0:
+                self._last_checked = updates[0].on_date
+            increment = sum(
+                u.json["reputation_change"]
+                for u in updates
+                if u.on_date > self._last_checked
+            )
+            return increment
+
+    def get_user(self, site: Union[str, stackexchange.Site]) -> UserProfile:
+        site = _to_site_domain(site)
         if site not in self._users:
             self._users[site] = Participant.UserProfile(site, self.name)
         return self._users[site]
 
-    def fetch_users(self, *sites: str):
-        for site in sites:
+    def fetch_users(self, *sites: Union[str, stackexchange.Site]):
+        for site in map(_to_site_domain, sites):
             self._users[site] = Participant.UserProfile(site, self.name)
+            return self._users.copy()
 
 
-class Update:
+class ScoreUpdate:
     participant: Participant
     per_site: Dict[str, int]
 
@@ -100,19 +95,29 @@ class Update:
 
 
 class Marathon:
-    sites: List[str]
+    sites: Mapping[str, stackexchange.Site]
     participants: Dict[str, Participant]
     duration: datetime.timedelta
     start_time: Optional[datetime.datetime]
     end_time: Optional[datetime.datetime]
 
     def __init__(self, *sites: str, duration: Union[float, datetime.timedelta] = 4):
-        self.sites = list(sites) if sites else list(DEFAULT_SITES)
+        """Initialise a new marathon
+
+        :param sites: API keys for the SE sites to track
+        :param duration: duration of the marathon
+        """
+        sites = sites or DEFAULT_SITES_KEYS
+        self._sites = {key: get_api(key) for key in sites}
         self.participants = {}
         self.duration = duration
         self.start_time = None
         self.end_time = None
         self._poll_thread: Optional[TimedStoppableThread] = None
+
+    @property
+    def sites(self):
+        return ReadOnlyDictView(self._sites)
 
     @property
     def duration(self):
@@ -154,32 +159,30 @@ class Marathon:
         return self._poll_thread is not None and not self._poll_thread.stopped
 
     def add_site(self, site: str):
-        if site not in SITES:
-            raise SiteNotFoundError(site)
-        self.sites.append(site)
+        self._sites[site] = get_api(site)
         for participant in self.participants.values():
             participant.fetch_users(site)
 
     def clear_sites(self):
-        self.sites.clear()
+        self._sites.clear()
 
     def add_participant(self, username: str):
         p = Participant(username)
         p.fetch_users(*self.sites)
         self.participants[username] = p
 
-    def poll(self) -> Iterator[Update]:
+    def poll(self) -> Iterator[ScoreUpdate]:
         """Lazily yield updates for each participant whose reputation has changed"""
         for participant in self.participants.values():
-            update = Update(participant)
+            update = ScoreUpdate(participant)
             for site in self.sites:
-                increment = participant.user(site).update()
+                increment = participant.get_user(site).update()
                 if increment:
                     update[site] = increment
             if update:
                 yield update
 
-    def start(self, handler: Generator[None, Update, None]):
+    def start(self, handler: Generator[None, ScoreUpdate, None]):
         """Start the marathon in a separate thread
 
         Creates a new thread that polls the Stack Exchange API
@@ -230,16 +233,12 @@ class UserError(SEMarathonError, LookupError):
 
 class UserNotFoundError(UserError):
     def __str__(self):
-        return "User {} not found at {}".format(
-            self.user.name, SITES[self.user.site]["name"]
-        )
+        return f"User {self.user.name} not found at {SITES[self.user.site]['name']}"
 
 
 class MultipleUsersFoundError(UserError):
     def __str__(self):
-        return "Multiple candidates found for user '{}' at {}".format(
-            self.user.name, SITES[self.user.site]["name"]
-        )
+        return f"Multiple candidates found for get_user '{self.user.name}' at {SITES[self.user.site]['name']}"
 
 
 class SiteError(SEMarathonError):
@@ -249,12 +248,36 @@ class SiteError(SEMarathonError):
 
 class SiteNotFoundError(SiteError, LookupError):
     def __str__(self):
-        return "Site '{}' not found on SE network".format(self.site)
+        return f"Site '{self.site}' not found on SE network"
 
 
 # ------------------------------- Misc helpers  -------------------------------
 
 
 @functools.lru_cache
-def get_api(site: str) -> stackapi.StackAPI:
-    return stackapi.StackAPI(site)
+def get_api(key: str) -> stackexchange.Site:
+    """Get a Site object corresponding to the given site key
+
+    :param key: a Stack Exchange API site key (e.g. "stackoverflow")
+    """
+    domain = _get_domain(key)
+    return stackexchange.Site(
+        domain, app_key=SE_APP_KEY, cache=60, impose_throttling=True
+    )
+
+
+def _to_site_domain(site: Union[str, stackexchange.Site]):
+    if isinstance(site, str):
+        return site
+    elif isinstance(site, stackexchange.Site):
+        return site.domain
+    else:
+        raise TypeError(f"expected either Site or str, got {repr(site)}")
+
+
+def _get_domain(site_api_key: str):
+    try:
+        url = SITES[site_api_key]["site_url"]
+        return re.match(r"https?://(?P<domain>.*)", url).group("domain")
+    except KeyError:
+        raise SiteNotFoundError(site_api_key)

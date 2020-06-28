@@ -1,3 +1,4 @@
+import collections
 import datetime
 import functools
 import logging
@@ -110,6 +111,20 @@ class TimedStoppableThread(StoppableThread):
     def stop(self):
         super(TimedStoppableThread, self).stop()
         self.timer.cancel()
+
+
+class ReadOnlyDictView(collections.Mapping):
+    def __init__(self, data):
+        self._data = data
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
 
 
 def format_exception_md(exception) -> str:

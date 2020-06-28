@@ -339,7 +339,7 @@ class SEMarathonBotSystem:
             def msg_lines(p: mth.Participant):
                 yield f"Added *{p.name}* to marathon:"
                 for site in self.marathon.sites:
-                    user = p.user(site)
+                    user = p.get_user(site)
                     yield (
                         rf" \- _{escape_mdv2(mth.SITES[site]['name'])}_ : "
                         f"[user ID {user.id}]({user.link})"
@@ -612,7 +612,7 @@ class SEMarathonBotSystem:
                 return "Marathon is not running"
 
         @coroutine
-        def _marathon_update_handler(self) -> Generator[None, mth.Update, None]:
+        def _marathon_update_handler(self) -> Generator[None, mth.ScoreUpdate, None]:
             try:
                 while True:
                     update = yield

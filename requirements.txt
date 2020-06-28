@@ -1,2 +1,2 @@
 python-telegram-bot
-stackapi
+git+https://github.com/plammens/Py-StackExchange.git@fork-master
