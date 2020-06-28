@@ -134,6 +134,7 @@ class Marathon:
 
     @property
     def refresh_interval(self) -> datetime.timedelta:
+        """Time interval between each query when polling the SE API"""
         if self.duration >= datetime.timedelta(hours=2):
             return datetime.timedelta(minutes=30)
         elif self.duration >= datetime.timedelta(minutes=45):
@@ -165,6 +166,7 @@ class Marathon:
         self.participants[username] = p
 
     def poll(self) -> Iterator[Update]:
+        """Lazily yield updates for each participant whose reputation has changed"""
         for participant in self.participants.values():
             update = Update(participant)
             for site in self.sites:
@@ -175,8 +177,16 @@ class Marathon:
                 yield update
 
     def start(self, target: Generator[None, Update, None]):
+        """Start the marathon in a separate thread
+
+        Creates a new thread that polls the Stack Exchange API
+
+        :param target: coroutine to which updates will be sent
+        """
+        timeout = self.refresh_interval.total_seconds()
+
         def run():
-            while not self._poll_thread.stop_event.wait(timeout=60):
+            while not self._poll_thread.stop_event.wait(timeout=timeout):
                 for update in self.poll():
                     target.send(update)
 
