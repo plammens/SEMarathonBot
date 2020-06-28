@@ -593,7 +593,7 @@ class SEMarathonBotSystem:
 
         def _leaderboard_text(self) -> str:
             def lines():
-                yield "LEADERBOARD\n"
+                yield "__LEADERBOARD__"
                 participants = self.marathon.participants.values()
                 for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
                     yield rf"{i}\. *{escape_mdv2(p)}* – {p.score} points"
