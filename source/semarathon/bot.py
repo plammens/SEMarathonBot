@@ -519,18 +519,18 @@ class SEMarathonBotSystem:
 
         # ------------------------------- Job callbacks  ----------------------------
 
-        def send_status_update(self):
+        def send_status_update(self, context: tge.CallbackContext):
             text = f"{self._status_text()}\n\n{self._leaderboard_text()}"
             self.send_message(text)
 
-        def countdown(self):
+        def countdown(self, context: tge.CallbackContext):
             _, remaining = self.marathon.elapsed_remaining
             seconds = int(remaining.total_seconds())
             minutes = seconds // 60
             fmt = f"{minutes} minutes" if minutes >= 1 else f"{seconds} seconds"
             self.send_message(f"*{fmt} remaining!*")
 
-        def start_scheduled_marathon(self):
+        def start_scheduled_marathon(self, context: tge.CallbackContext):
             self._start_marathon()
 
         # ---------------------------- Utility methods  ----------------------------
