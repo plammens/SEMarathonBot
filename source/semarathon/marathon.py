@@ -2,11 +2,11 @@ import datetime
 import functools
 import json
 import time
-from typing import Dict, Generator, Iterator, List, Optional, Tuple
+from typing import Dict, Generator, Iterator, List, Optional, Tuple, Union
 
 import stackapi
 
-from semarathon.utils import StoppableThread
+from semarathon.utils import TimedStoppableThread
 
 with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
@@ -163,21 +163,19 @@ class Marathon:
                 yield update
 
     def start(self, target: Generator[None, Update, None]):
-        self.start_time = datetime.datetime.now()
-        self.end_time = self.start_time + self.duration
-
         def run():
-            while datetime.datetime.now() < self.end_time:
+            while not self._poll_thread.stop_event.wait(timeout=60):
                 for update in self.poll():
                     target.send(update)
-                time.sleep(10)
 
-        self._poll_thread = StoppableThread(
-            name="MarathonPoll", target=run, daemon=True
+        self.start_time = datetime.datetime.now()
+        self.end_time = self.start_time + self.duration
+        self._poll_thread = TimedStoppableThread(
+            duration=self.duration, name="MarathonPoll", target=run, daemon=True
         )
         self._poll_thread.start()
 
-    def destroy(self):
+    def stop(self):
         if self.is_running:
             self._poll_thread.stop()
             self._poll_thread.join()

@@ -1,6 +1,7 @@
+import datetime
 import functools
 import threading
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, Union
 
 import telegram as tg
 import telegram.ext.filters
@@ -80,14 +81,30 @@ class StoppableThread(threading.Thread):
 
     def __init__(self, *args, **kwargs):
         super(StoppableThread, self).__init__(*args, **kwargs)
-        self._stop_event = threading.Event()
+        self.stop_event = threading.Event()
 
     def stop(self):
-        self._stop_event.set()
+        self.stop_event.set()
 
     @property
     def stopped(self):
-        return self._stop_event.is_set()
+        return self.stop_event.is_set()
+
+
+class TimedStoppableThread(StoppableThread):
+    def __init__(self, duration: Union[float, datetime.timedelta], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if isinstance(duration, datetime.timedelta):
+            duration = duration.total_seconds()
+        self.timer = threading.Timer(duration, self.stop)
+
+    def run(self) -> None:
+        self.timer.start()
+        super().run()
+
+    def stop(self):
+        super(TimedStoppableThread, self).stop()
+        self.timer.cancel()
 
 
 def format_exception_md(exception) -> str:

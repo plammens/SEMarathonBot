@@ -483,8 +483,7 @@ class SEMarathonBotSystem:
             raise NotImplementedError
 
         def _shutdown(self):
-            # TODO: fix shutdown
-            self.marathon.destroy()
+            self.marathon.stop()
             for job in self.bot_system.job_queue.jobs():
                 job.schedule_removal()
             del self.bot_system.sessions[self.id]
