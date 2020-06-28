@@ -23,7 +23,9 @@ def use_single_http_session(monkeypatch):
 
 @pytest.fixture
 def marathon():
-    return mth.Marathon()
+    marathon = mth.Marathon()
+    yield marathon
+    marathon.stop()
 
 
 def mock_target():
