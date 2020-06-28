@@ -4,7 +4,8 @@ import functools
 import inspect
 import itertools
 import logging
-from typing import Any, Callable, ClassVar, Dict, Optional, TypeVar
+import time
+from typing import Any, Callable, ClassVar, Dict, Generator, Optional, TypeVar
 
 import telegram as tg
 import telegram.ext as tge
@@ -577,7 +578,7 @@ class SEMarathonBotSystem:
                 yield "*Sites*:"
                 for site in self.marathon.sites:
                     site_name_md = escape_mdv2(mth.SITES[site]["name"])
-                    yield rf"\t \- _{site_name_md}_"
+                    yield f"\t\\- _{site_name_md}_"
 
             return "\n".join(lines())
 
