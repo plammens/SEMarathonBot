@@ -103,13 +103,25 @@ class Marathon:
     start_time: Optional[datetime.datetime]
     end_time: Optional[datetime.datetime]
 
-    def __init__(self, *sites: str):
+    def __init__(self, *sites: str, duration: Union[float, datetime.timedelta] = 4):
         self.sites = list(sites) if sites else list(DEFAULT_SITES)
         self.participants = {}
-        self.duration = datetime.timedelta(hours=12)
+        self.duration = duration
         self.start_time = None
         self.end_time = None
-        self._poll_thread = None
+        self._poll_thread: Optional[TimedStoppableThread] = None
+
+    @property
+    def duration(self):
+        return self._duration
+
+    @duration.setter
+    def duration(self, value: Union[float, datetime.timedelta]):
+        if not isinstance(value, datetime.timedelta):
+            value = datetime.timedelta(hours=value)
+        if value.total_seconds() < 0:
+            raise ValueError(f"duration should be positive (received {value})")
+        self._duration = value
 
     @property
     def elapsed_remaining(self) -> Tuple[datetime.timedelta, datetime.timedelta]:
