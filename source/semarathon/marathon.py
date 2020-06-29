@@ -48,7 +48,8 @@ class Participant:
         score: int
 
         def __init__(self, site_user: se.User):
-            self.site_key = SITES_BY_URL[_domain_to_url(site_user.site.domain)]
+            url = _domain_to_url(site_user.site.domain)
+            self.site_key = SITES_BY_URL[url]["api_site_parameter"]
             self._site_user = site_user
             self.score = 0
             self._last_checked: Optional[datetime.datetime] = None
