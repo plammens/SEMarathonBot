@@ -23,17 +23,20 @@ _stack_auth = stackauth.StackAuth()
 
 
 class Participant:
-    name: str
     network_id: int
 
     def __init__(self, name: str, network_id: int):
-        self.name = name
+        self._name = name
         self.network_id = network_id
         self._users: Dict[str, Participant.UserProfile] = {}
         self._score = 0
 
     def __str__(self):
         return self.name
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def score(self):
