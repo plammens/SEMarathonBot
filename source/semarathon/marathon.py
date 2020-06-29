@@ -272,36 +272,33 @@ class SEMarathonError(Exception):
     pass
 
 
-class UserError(SEMarathonError):
+class UserLookupError(SEMarathonError, LookupError):
     def __init__(self, site_key: str, username_or_id: Union[str, int], *args):
         super().__init__(site_key, username_or_id, *args)
         self.username_or_id = username_or_id
         self.site_key = site_key
 
 
-class UserNotFoundError(UserError, LookupError):
-    def __init__(self, site_key: str, username_or_id: Union[str, int], *args):
-        super().__init__(username_or_id, site_key, *args)
+class UserNotFoundError(UserLookupError):
+    def __init__(self, site_key: str, username_or_id: Union[str, int]):
+        super().__init__(site_key, username_or_id)
 
     def __str__(self):
-        username, site_key, *_ = self.args
-        return f"User {repr(username)} not found at {SITES[site_key]['name']}"
+        return f"User {repr(self.username_or_id)} not found at {SITES[self.site_key]['name']}"
 
 
-class MultipleUsersFoundError(UserError, LookupError):
+class MultipleUsersFoundError(UserLookupError):
     def __init__(
-        self, site_key: str, username_or_id: str, candidates: Sequence[se.User], *args,
+        self, site_key: str, username_or_id: str, candidates: Sequence[se.User]
     ):
         super(MultipleUsersFoundError, self).__init__(
             site_key, username_or_id, candidates
         )
-        self.username = username_or_id
-        self.site_key = site_key
         self.candidates = candidates
 
     def __str__(self):
         return (
-            f"Multiple candidates found for user {repr(self.username)} "
+            f"Multiple candidates found for user {repr(self.username_or_id)} "
             f"at {SITES[self.site_key]['name']} (found {len(self.candidates)} matches)"
         )
 

@@ -1,2 +1,3 @@
 python-telegram-bot
 git+https://github.com/plammens/Py-StackExchange.git@fork-master
+multimethod
