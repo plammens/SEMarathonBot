@@ -102,7 +102,7 @@ class Participant:
 
         def update(self) -> int:
             updates: Sequence[se.RepChange] = self._site_user.reputation_detail.fetch(
-                fromdate=int(self._last_checked.timestamp())
+                fromdate=self._last_checked and int(self._last_checked.timestamp())
             )
             if len(updates) > 0:
                 self._last_checked = updates[0].on_date
