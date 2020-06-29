@@ -230,7 +230,15 @@ class Marathon:
 
     @property
     def is_running(self) -> bool:
-        return self._poll_thread is not None and not self._poll_thread.stopped
+        if self._poll_thread is None:
+            return False
+        stopped = self._poll_thread.stopped
+        alive = self._poll_thread.is_alive()
+        if not stopped and not alive:
+            raise RuntimeError(
+                f"{self._poll_thread} died without stopping: {stopped=}, {alive=}"
+            )
+        return alive
 
     def add_site(self, site_key: str):
         self._sites[site_key] = get_api(site_key)
