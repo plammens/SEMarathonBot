@@ -51,14 +51,35 @@ class Participant:
             self._last_checked: Optional[datetime.datetime] = None
 
         @classmethod
+        def from_id(cls, site_key: str, user_id: int) -> "Participant.UserProfile":
+            """Create a UserProfile object given a user id for a SE site
+
+            :param site_key: site API key for the SE site this user pertains to
+            :param user_id: user id for the given site
+
+            :return: a UserProfile object corresponding to the user with the given id
+            :raises UserNotFoundError: if no user with the given id exists in the site
+            """
+            results = get_api(site_key).users((user_id,))
+            assert len(results) <= 1
+            if len(results) == 0:
+                raise UserNotFoundError(site_key, user_id)
+            return Participant.UserProfile(results[0])
+
+        @classmethod
         def from_username(
             cls, site_key: str, username: str
         ) -> "Participant.UserProfile":
-            """Create a UserProfile object given a unique username
+            """Create a UserProfile object given a unique username for a SE site
 
             :param site_key: site API key for the SE site this user pertains to
             :param username: unique username for the given site
+
             :return: a UserProfile object corresponding to the user with said username
+            :raises UserNotFoundError: if no user with the given username exists for
+                                       the given site
+            :raises MultipleUsersFoundError: if more than one user with the given
+                                             username exists for the given site
             """
             results: Sequence[se.User] = get_api(site_key).users_by_name(username)
             if not results:
@@ -68,7 +89,7 @@ class Participant:
             return Participant.UserProfile(results[0])
 
         @property
-        def id(self) -> int:
+        def user_id(self) -> int:
             return self._site_user.id
 
         @property
@@ -77,7 +98,7 @@ class Participant:
 
         @property
         def link(self):
-            return f"https://{self._site_user.site.domain}/users/{self.id}/"
+            return f"https://{self._site_user.site.domain}/users/{self.user_id}/"
 
         def update(self) -> int:
             updates: Sequence[se.RepChange] = self._site_user.reputation_detail.fetch(
@@ -251,13 +272,16 @@ class SEMarathonError(Exception):
     pass
 
 
-class UserError(SEMarathonError, LookupError):
-    pass
+class UserError(SEMarathonError):
+    def __init__(self, site_key: str, username_or_id: Union[str, int], *args):
+        super().__init__(site_key, username_or_id, *args)
+        self.username_or_id = username_or_id
+        self.site_key = site_key
 
 
 class UserNotFoundError(UserError, LookupError):
-    def __init__(self, site_key: str, username: str, *args):
-        super().__init__(username, site_key, *args)
+    def __init__(self, site_key: str, username_or_id: Union[str, int], *args):
+        super().__init__(username_or_id, site_key, *args)
 
     def __str__(self):
         username, site_key, *_ = self.args
@@ -266,10 +290,12 @@ class UserNotFoundError(UserError, LookupError):
 
 class MultipleUsersFoundError(UserError, LookupError):
     def __init__(
-        self, site_key: str, username: str, candidates: Sequence[se.User], *args,
+        self, site_key: str, username_or_id: str, candidates: Sequence[se.User], *args,
     ):
-        super().__init__(username, site_key, candidates, *args)
-        self.username = username
+        super(MultipleUsersFoundError, self).__init__(
+            site_key, username_or_id, candidates
+        )
+        self.username = username_or_id
         self.site_key = site_key
         self.candidates = candidates
 
