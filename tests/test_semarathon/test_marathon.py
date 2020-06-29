@@ -5,6 +5,7 @@ import time
 
 import pytest
 import requests
+from freezegun import freeze_time
 
 from semarathon import marathon as mth
 
@@ -90,16 +91,17 @@ class TestMarathon:
             marathon.duration = duration
 
     def test_start_correctState(self, marathon):
-        marathon.start(mock_target())
+        now = datetime.datetime.now()
+        with freeze_time(now):
+            marathon.start(mock_target())
         assert marathon.is_running
-        assert marathon.start_time is not None
-        assert marathon.start_time < datetime.datetime.now()
+        assert marathon.start_time == now
         assert marathon.end_time == marathon.start_time + marathon.duration
 
     def test_start_withZeroDuration_ends(self, marathon):
         marathon.duration = datetime.timedelta(0)
         marathon.start(mock_target())
-        time.sleep(0.2)
+        time.sleep(0.01)
         assert not marathon.is_running
 
     def test_stop_endsMarathon(self, marathon):
