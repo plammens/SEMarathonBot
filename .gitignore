@@ -107,4 +107,5 @@ venv.bak/
 
 
 /token.txt
+/se-app-key.txt
 *pickle
