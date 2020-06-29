@@ -17,6 +17,9 @@ SE_APP_KEY = Text.load("se-app-key")
 logger = logging.getLogger(__name__)
 
 
+# TODO: load participant from network ID
+
+
 class Participant:
     name: str
 
@@ -35,8 +38,24 @@ class Participant:
     class UserProfile(stackexchange.User):
         site: stackexchange.Site
         id: int
-
         score: int
+
+        @classmethod
+        def from_username(
+            cls, site_key: str, username: str
+        ) -> "Participant.UserProfile":
+            """Create a UserProfile object given a unique username
+
+            :param site_key: site API key for the SE site this user pertains to
+            :param username: unique username for the given site
+            :return: a UserProfile object corresponding to the user with said username
+            """
+            results = get_api(site_key).users_by_name(username)
+            if not results:
+                raise UserNotFoundError(site_key, username)
+            elif len(results) > 1:
+                raise MultipleUsersFoundError(site_key, username, results)
+            return results[0]
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -60,16 +79,13 @@ class Participant:
             )
             return increment
 
-    def get_user(self, site: Union[str, stackexchange.Site]) -> UserProfile:
-        site = _to_site_domain(site)
-        if site not in self._users:
-            self._users[site] = Participant.UserProfile(site, self.name)
-        return self._users[site]
+    def get_user(self, site_key: str) -> UserProfile:
+        if site_key not in self._users:
+            self._users[site_key] = self.UserProfile.from_username(site_key, self.name)
+        return self._users[site_key]
 
-    def fetch_users(self, *sites: Union[str, stackexchange.Site]):
-        for site in map(_to_site_domain, sites):
-            self._users[site] = Participant.UserProfile(site, self.name)
-            return self._users.copy()
+    def fetch_users(self, *site_keys: str) -> Mapping[str, UserProfile]:
+        return {key: self.get_user(key) for key in site_keys}
 
 
 class ScoreUpdate:
@@ -223,22 +239,36 @@ class SEMarathonError(Exception):
 
 
 class UserError(SEMarathonError, LookupError):
-    def __init__(self, user: "Participant.UserProfile"):
-        self.user = user
-
-    @property
-    def site(self):
-        return self.user.site
+    pass
 
 
-class UserNotFoundError(UserError):
+class UserNotFoundError(UserError, LookupError):
+    def __init__(self, site_key: str, username: str, *args):
+        super().__init__(username, site_key, *args)
+
     def __str__(self):
-        return f"User {self.user.name} not found at {SITES[self.user.site]['name']}"
+        username, site_key, *_ = self.args
+        return f"User {repr(username)} not found at {SITES[site_key]['name']}"
 
 
-class MultipleUsersFoundError(UserError):
+class MultipleUsersFoundError(UserError, LookupError):
+    def __init__(
+        self,
+        site_key: str,
+        username: str,
+        candidates: Sequence[stackexchange.User],
+        *args,
+    ):
+        super().__init__(username, site_key, candidates, *args)
+        self.username = username
+        self.site_key = site_key
+        self.candidates = candidates
+
     def __str__(self):
-        return f"Multiple candidates found for get_user '{self.user.name}' at {SITES[self.user.site]['name']}"
+        return (
+            f"Multiple candidates found for user {repr(self.username)} "
+            f"at {SITES[self.site_key]['name']} (found {len(self.candidates)} matches)"
+        )
 
 
 class SiteError(SEMarathonError):

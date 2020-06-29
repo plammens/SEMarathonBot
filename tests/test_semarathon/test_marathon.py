@@ -33,6 +33,8 @@ def mock_target():
     assert False, f"received update {update} with no participants"
 
 
+# TODO: mock Site API (fetch)
+
 # noinspection PyPep8Naming
 @pytest.mark.usefixtures("use_single_http_session")
 class TestMarathon:

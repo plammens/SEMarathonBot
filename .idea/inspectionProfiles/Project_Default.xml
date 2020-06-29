@@ -30,6 +30,7 @@
       <option name="ignoredIdentifiers">
         <list>
           <option value="semarathon.marathon.Participant.UserProfile.*" />
+          <option value="stackexchange.models.RepChange.on_date" />
         </list>
       </option>
     </inspection_tool>
