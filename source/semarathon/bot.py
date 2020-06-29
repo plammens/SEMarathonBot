@@ -337,7 +337,7 @@ class SEMarathonBotSystem:
         def add_participants(self, update: tg.Update, context: tge.CallbackContext):
             """Add participants to the marathon"""
 
-            def msg_lines(p: mth.Participant):
+            def lines(p: mth.Participant):
                 yield f"Added *{p.name}* to marathon:"
                 for site in self.marathon.sites:
                     user = p.user_profiles[site]
@@ -349,8 +349,9 @@ class SEMarathonBotSystem:
                 yield r"Please verify the IDs are correct\."
 
             for name, network_id in more_itertools.pairwise(context.args):
-                self.marathon.add_participant(name, network_id)
-                text = "\n".join(msg_lines(self.marathon.participants[name]))
+                participant = mth.Participant(name, network_id)
+                self.marathon.add_participant(participant)
+                text = "\n".join(lines(participant))
                 self.send_message(text=text, disable_web_page_preview=True)
 
         # TODO: remove participant

@@ -236,11 +236,15 @@ class Marathon:
     def clear_sites(self):
         self._sites.clear()
 
-    def add_participant(self, name: str, network_id: int):
-        participant = Participant(name, network_id)
+    @multimethod
+    def add_participant(self, participant: Participant) -> None:
+        self.participants[participant.name] = participant
         for site in self.sites:
             participant.add_user_profile(site)
-        self.participants[name] = participant
+
+    @add_participant.register
+    def add_participant(self, name: str, network_id: int) -> None:
+        self.add_participant(Participant(name, network_id))
 
     def poll(self) -> Iterator[ScoreUpdate]:
         """Lazily yield updates for each participant whose reputation has changed"""
