@@ -5,7 +5,7 @@ import logging
 import re
 from typing import Dict, Generator, Iterator, Mapping, Optional, Sequence, Tuple, Union
 
-import stackexchange
+import stackexchange as se
 
 from semarathon.utils import ReadOnlyDictView, Text, TimedStoppableThread
 
@@ -39,8 +39,7 @@ class Participant:
     def user_profiles(self) -> Mapping[str, "Participant.UserProfile"]:
         return ReadOnlyDictView(self._users)
 
-    class UserProfile(stackexchange.User):
-        site: stackexchange.Site
+    class UserProfile(se.User):
         id: int
         score: int
 
@@ -54,12 +53,13 @@ class Participant:
             :param username: unique username for the given site
             :return: a UserProfile object corresponding to the user with said username
             """
-            results = get_api(site_key).users_by_name(username)
+            results: Sequence[se.User] = get_api(site_key).users_by_name(username)
             if not results:
                 raise UserNotFoundError(site_key, username)
             elif len(results) > 1:
                 raise MultipleUsersFoundError(site_key, username, results)
-            return results[0]
+            user = results[0]
+            return Participant.UserProfile(user.json, user.site)
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -71,7 +71,7 @@ class Participant:
             return f"{self.site.domain}/users/{self.id}/"
 
         def update(self) -> int:
-            updates: Sequence[stackexchange.RepChange] = self.reputation_detail.fetch(
+            updates: Sequence[se.RepChange] = self.reputation_detail.fetch(
                 fromdate=int(self._last_checked.timestamp())
             )
             if len(updates) > 0:
@@ -115,7 +115,7 @@ class ScoreUpdate:
 
 
 class Marathon:
-    sites: Mapping[str, stackexchange.Site]
+    sites: Mapping[str, se.Site]
     participants: Dict[str, Participant]
     duration: datetime.timedelta
     start_time: Optional[datetime.datetime]
@@ -257,11 +257,7 @@ class UserNotFoundError(UserError, LookupError):
 
 class MultipleUsersFoundError(UserError, LookupError):
     def __init__(
-        self,
-        site_key: str,
-        username: str,
-        candidates: Sequence[stackexchange.User],
-        *args,
+        self, site_key: str, username: str, candidates: Sequence[se.User], *args,
     ):
         super().__init__(username, site_key, candidates, *args)
         self.username = username
@@ -289,21 +285,19 @@ class SiteNotFoundError(SiteError, LookupError):
 
 
 @functools.lru_cache
-def get_api(key: str) -> stackexchange.Site:
+def get_api(key: str) -> se.Site:
     """Get a Site object corresponding to the given site key
 
     :param key: a Stack Exchange API site key (e.g. "stackoverflow")
     """
     domain = _get_domain(key)
-    return stackexchange.Site(
-        domain, app_key=SE_APP_KEY, cache=60, impose_throttling=True
-    )
+    return se.Site(domain, app_key=SE_APP_KEY, cache=60, impose_throttling=True)
 
 
-def _to_site_domain(site: Union[str, stackexchange.Site]):
+def _to_site_domain(site: Union[str, se.Site]):
     if isinstance(site, str):
         return site
-    elif isinstance(site, stackexchange.Site):
+    elif isinstance(site, se.Site):
         return site.domain
     else:
         raise TypeError(f"expected either Site or str, got {repr(site)}")
