@@ -113,7 +113,7 @@ class TimedStoppableThread(StoppableThread):
         self.timer.cancel()
 
 
-class ReadOnlyDictView(collections.Mapping):
+class ReadOnlyDictView(collections.abc.Mapping):
     def __init__(self, data):
         self._data = data
 
