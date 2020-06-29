@@ -70,18 +70,12 @@ class TestMarathon:
             marathon.add_site(site)
 
     @pytest.mark.parametrize(
-        ["sites", "participant"], argvalues=[([], "Anakhand"), ([], "maxbp"),]
+        ["sites", "name", "network_id"],
+        argvalues=[([], "Anakhand", 8120429), ([], "maxbp", 11213456)],
     )
-    def test_addParticipant_uniqueUsername_works(self, sites, participant):
+    def test_addParticipant_networkID_works(self, sites, name, network_id):
         marathon = mth.Marathon(*sites)
-        marathon.add_participant(participant)
-
-    @pytest.mark.parametrize(
-        ["sites", "participant"], argvalues=[([], 8120429), ([], 11213456)]
-    )
-    def test_addParticipant_networkID_works(self, sites, participant):
-        marathon = mth.Marathon(*sites)
-        marathon.add_participant(participant)
+        marathon.add_participant(name, network_id)
 
     @pytest.mark.parametrize("duration", [1, 2, 3.5, 0.25])
     def test_setDuration_number_convertedToTimeDelta(self, marathon, duration):

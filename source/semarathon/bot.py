@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any, Callable, ClassVar, Dict, Generator, Optional, TypeVar
 
+import more_itertools
 import telegram as tg
 import telegram.ext as tge
 from telegram.parsemode import ParseMode
@@ -339,7 +340,7 @@ class SEMarathonBotSystem:
             def msg_lines(p: mth.Participant):
                 yield f"Added *{p.name}* to marathon:"
                 for site in self.marathon.sites:
-                    user = p.get_user(site)
+                    user = p.user_profiles[site]
                     yield (
                         rf" \- _{escape_mdv2(mth.SITES[site]['name'])}_ : "
                         f"[user ID {user.user_id}]({user.link})"
@@ -347,9 +348,9 @@ class SEMarathonBotSystem:
                 yield ""
                 yield r"Please verify the IDs are correct\."
 
-            for username in context.args:
-                self.marathon.add_participant(username)
-                text = "\n".join(msg_lines(self.marathon.participants[username]))
+            for name, network_id in more_itertools.pairwise(context.args):
+                self.marathon.add_participant(name, network_id)
+                text = "\n".join(msg_lines(self.marathon.participants[name]))
                 self.send_message(text=text, disable_web_page_preview=True)
 
         # TODO: remove participant

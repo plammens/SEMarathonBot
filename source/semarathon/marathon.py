@@ -5,7 +5,9 @@ import logging
 import re
 from typing import Dict, Generator, Iterator, Mapping, Optional, Sequence, Tuple, Union
 
+import stackauth
 import stackexchange as se
+from multimethod import multimethod
 
 from semarathon.utils import ReadOnlyDictView, Text, TimedStoppableThread
 
@@ -17,15 +19,16 @@ SE_APP_KEY = Text.load("se-app-key")
 
 logger = logging.getLogger(__name__)
 
-
-# TODO: load participant from network ID
+_stack_auth = stackauth.StackAuth()
 
 
 class Participant:
     name: str
+    network_id: int
 
-    def __init__(self, username: str):
-        self.name = username
+    def __init__(self, name: str, network_id: int):
+        self.name = name
+        self.network_id = network_id
         self._users: Dict[str, Participant.UserProfile] = {}
         self._score = 0
 
@@ -113,13 +116,28 @@ class Participant:
             )
             return increment
 
-    def get_user(self, site_key: str) -> UserProfile:
-        if site_key not in self._users:
-            self._users[site_key] = self.UserProfile.from_username(site_key, self.name)
-        return self._users[site_key]
+    # TODO: add users by id
 
-    def fetch_users(self, *site_keys: str) -> Mapping[str, UserProfile]:
-        return {key: self.get_user(key) for key in site_keys}
+    @multimethod
+    def add_user(self, site_key: str, user_id: int) -> None:
+        """Add user by ID; see :method:`Participant.UserProfile.from_id`"""
+        self._users[site_key] = self.UserProfile.from_id(site_key, user_id)
+
+    @add_user.register
+    def add_user(self, site_key: str, username: str):
+        """Add user by username; see :method:`Participant.UserProfile.from_username`"""
+        self._users[site_key] = self.UserProfile.from_username(site_key, username)
+
+    @add_user.register
+    def add_user(self, site_key: str):
+        """Add user by association to the network account"""
+        url = SITES[site_key]["site_url"]
+        results = _stack_auth.associated_from_assoc(self.network_id, only_valid=True)
+        matching = [ua for ua in results if ua.json_ob.site_url == url]
+        assert len(matching) <= 1
+        if not matching:
+            raise UserNotFoundError(site_key, f"{self.network_id} (network id)")
+        return matching[0]
 
 
 class ScoreUpdate:
@@ -208,25 +226,26 @@ class Marathon:
     def is_running(self) -> bool:
         return self._poll_thread is not None and not self._poll_thread.stopped
 
-    def add_site(self, site: str):
-        self._sites[site] = get_api(site)
+    def add_site(self, site_key: str):
+        self._sites[site_key] = get_api(site_key)
         for participant in self.participants.values():
-            participant.fetch_users(site)
+            participant.add_user(site_key)
 
     def clear_sites(self):
         self._sites.clear()
 
-    def add_participant(self, username: str):
-        p = Participant(username)
-        p.fetch_users(*self.sites)
-        self.participants[username] = p
+    def add_participant(self, name: str, network_id: int):
+        participant = Participant(name, network_id)
+        for site in self.sites:
+            participant.add_user(site)
+        self.participants[name] = participant
 
     def poll(self) -> Iterator[ScoreUpdate]:
         """Lazily yield updates for each participant whose reputation has changed"""
         for participant in self.participants.values():
             update = ScoreUpdate(participant)
             for site in self.sites:
-                increment = participant.get_user(site).update()
+                increment = participant.user_profiles[site].update()
                 if increment:
                     update[site] = increment
             if update:
@@ -249,6 +268,7 @@ class Marathon:
             logger.info("Ending marathon thread")
             handler.close()
 
+        self._check_all_participants_have_users()
         self.start_time = datetime.datetime.now()
         self.end_time = self.start_time + self.duration
         self._poll_thread = TimedStoppableThread(
@@ -263,6 +283,14 @@ class Marathon:
             self._poll_thread.join()
         else:
             logger.warning("Tried to stop a marathon that isn't running")
+
+    def _check_all_participants_have_users(self):
+        for participant in self.participants.values():
+            for site in self._sites:
+                if site not in participant.user_profiles:
+                    raise SEMarathonError(
+                        f"Missing a {SITES[site]['name']} user profile for {participant}"
+                    )
 
 
 # ------------------------------- Exceptions  -------------------------------
@@ -305,6 +333,7 @@ class MultipleUsersFoundError(UserLookupError):
 
 class SiteError(SEMarathonError):
     def __init__(self, site):
+        super(SiteError, self).__init__(site)
         self.site = site
 
 
