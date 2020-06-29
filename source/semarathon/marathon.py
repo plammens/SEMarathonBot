@@ -11,6 +11,7 @@ from semarathon.utils import ReadOnlyDictView, Text, TimedStoppableThread
 
 with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
+SITES_BY_URL = {site["site_url"]: site for site in SITES.values()}
 DEFAULT_SITES_KEYS = ("stackoverflow", "math", "tex")
 SE_APP_KEY = Text.load("se-app-key")
 
@@ -39,9 +40,15 @@ class Participant:
     def user_profiles(self) -> Mapping[str, "Participant.UserProfile"]:
         return ReadOnlyDictView(self._users)
 
-    class UserProfile(se.User):
-        id: int
+    class UserProfile:
+        site_key: str
         score: int
+
+        def __init__(self, site_user: se.User):
+            self.site_key = SITES_BY_URL[_domain_to_url(site_user.site.domain)]
+            self._site_user = site_user
+            self.score = 0
+            self._last_checked: Optional[datetime.datetime] = None
 
         @classmethod
         def from_username(
@@ -58,20 +65,22 @@ class Participant:
                 raise UserNotFoundError(site_key, username)
             elif len(results) > 1:
                 raise MultipleUsersFoundError(site_key, username, results)
-            user = results[0]
-            return Participant.UserProfile(user.json, user.site)
+            return Participant.UserProfile(results[0])
 
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.score = 0
-            self._last_checked = datetime.datetime.now()
+        @property
+        def id(self) -> int:
+            return self._site_user.id
+
+        @property
+        def display_name(self) -> str:
+            return self._site_user.display_name
 
         @property
         def link(self):
-            return f"{self.site.domain}/users/{self.id}/"
+            return f"https://{self._site_user.site.domain}/users/{self.id}/"
 
         def update(self) -> int:
-            updates: Sequence[se.RepChange] = self.reputation_detail.fetch(
+            updates: Sequence[se.RepChange] = self._site_user.reputation_detail.fetch(
                 fromdate=int(self._last_checked.timestamp())
             )
             if len(updates) > 0:
@@ -306,6 +315,14 @@ def _to_site_domain(site: Union[str, se.Site]):
 def _get_domain(site_api_key: str):
     try:
         url = SITES[site_api_key]["site_url"]
-        return re.match(r"https?://(?P<domain>.*)", url).group("domain")
+        return _extract_domain(url)
     except KeyError:
         raise SiteNotFoundError(site_api_key)
+
+
+def _extract_domain(url: str):
+    return re.match(r"https?://(?P<domain>[^/]*)", url).group("domain")
+
+
+def _domain_to_url(domain: str):
+    return f"https://{domain}"

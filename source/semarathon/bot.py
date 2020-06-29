@@ -342,7 +342,7 @@ class SEMarathonBotSystem:
                     user = p.get_user(site)
                     yield (
                         rf" \- _{escape_mdv2(mth.SITES[site]['name'])}_ : "
-                        f"[user ID {user.id}]({user.link})"
+                        f"[user ID {user.user_id}]({user.link})"
                     )
                 yield ""
                 yield r"Please verify the IDs are correct\."
