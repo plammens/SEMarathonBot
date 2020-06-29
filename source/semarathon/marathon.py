@@ -116,20 +116,22 @@ class Participant:
             )
             return increment
 
-    # TODO: add users by id
-
     @multimethod
-    def add_user(self, site_key: str, user_id: int) -> None:
+    def add_user_profile(self, user_profile: "Participant.UserProfile") -> None:
+        self._users[user_profile.site_key] = user_profile
+
+    @add_user_profile.register
+    def add_user_profile(self, site_key: str, user_id: int) -> None:
         """Add user by ID; see :method:`Participant.UserProfile.from_id`"""
-        self._users[site_key] = self.UserProfile.from_id(site_key, user_id)
+        self.add_user_profile(self.UserProfile.from_id(site_key, user_id))
 
-    @add_user.register
-    def add_user(self, site_key: str, username: str):
+    @add_user_profile.register
+    def add_user_profile(self, site_key: str, username: str) -> None:
         """Add user by username; see :method:`Participant.UserProfile.from_username`"""
-        self._users[site_key] = self.UserProfile.from_username(site_key, username)
+        self.add_user_profile(self.UserProfile.from_username(site_key, username))
 
-    @add_user.register
-    def add_user(self, site_key: str):
+    @add_user_profile.register
+    def add_user_profile(self, site_key: str) -> None:
         """Add user by association to the network account"""
         url = SITES[site_key]["site_url"]
         results = _stack_auth.associated_from_assoc(self.network_id, only_valid=True)
@@ -137,7 +139,7 @@ class Participant:
         assert len(matching) <= 1
         if not matching:
             raise UserNotFoundError(site_key, f"{self.network_id} (network id)")
-        self._users[site_key] = matching[0]
+        self.add_user_profile(matching[0])
 
 
 class ScoreUpdate:
@@ -229,7 +231,7 @@ class Marathon:
     def add_site(self, site_key: str):
         self._sites[site_key] = get_api(site_key)
         for participant in self.participants.values():
-            participant.add_user(site_key)
+            participant.add_user_profile(site_key)
 
     def clear_sites(self):
         self._sites.clear()
@@ -237,7 +239,7 @@ class Marathon:
     def add_participant(self, name: str, network_id: int):
         participant = Participant(name, network_id)
         for site in self.sites:
-            participant.add_user(site)
+            participant.add_user_profile(site)
         self.participants[name] = participant
 
     def poll(self) -> Iterator[ScoreUpdate]:
