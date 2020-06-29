@@ -3,7 +3,7 @@ import functools
 import json
 import logging
 import re
-from typing import Dict, Generator, Iterator, Mapping, Optional, Tuple, Union
+from typing import Dict, Generator, Iterator, Mapping, Optional, Sequence, Tuple, Union
 
 import stackexchange
 
@@ -34,6 +34,10 @@ class Participant:
     @property
     def score(self):
         return self._score
+
+    @property
+    def user_profiles(self) -> Mapping[str, "Participant.UserProfile"]:
+        return ReadOnlyDictView(self._users)
 
     class UserProfile(stackexchange.User):
         site: stackexchange.Site
@@ -67,13 +71,13 @@ class Participant:
             return f"{self.site.domain}/users/{self.id}/"
 
         def update(self) -> int:
-            updates = self.reputation_detail.fetch(
+            updates: Sequence[stackexchange.RepChange] = self.reputation_detail.fetch(
                 fromdate=int(self._last_checked.timestamp())
             )
             if len(updates) > 0:
                 self._last_checked = updates[0].on_date
             increment = sum(
-                u.json["reputation_change"]
+                u.json_ob.reputation_change
                 for u in updates
                 if u.on_date > self._last_checked
             )
