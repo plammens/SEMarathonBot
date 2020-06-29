@@ -137,7 +137,7 @@ class Participant:
         assert len(matching) <= 1
         if not matching:
             raise UserNotFoundError(site_key, f"{self.network_id} (network id)")
-        return matching[0]
+        self._users[site_key] = matching[0]
 
 
 class ScoreUpdate:
