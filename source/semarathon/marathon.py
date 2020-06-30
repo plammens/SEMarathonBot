@@ -212,8 +212,14 @@ class Marathon:
     duration: datetime.timedelta
     start_time: Optional[datetime.datetime]
     end_time: Optional[datetime.datetime]
+    refresh_interval: datetime.timedelta
 
-    def __init__(self, *sites: str, duration: Union[float, datetime.timedelta] = 4):
+    def __init__(
+        self,
+        *sites: str,
+        duration: Union[float, datetime.timedelta] = 4,
+        refresh_interval: datetime.timedelta = datetime.timedelta(minutes=5),
+    ):
         """Initialise a new marathon
 
         :param sites: API keys for the SE sites to track
@@ -225,6 +231,7 @@ class Marathon:
         self.duration = duration
         self.start_time = None
         self.end_time = None
+        self.refresh_interval = refresh_interval
         self._poll_thread: Optional[TimedStoppableThread] = None
 
     @property
@@ -255,20 +262,6 @@ class Marathon:
         assert self.end_time is not None
         now = datetime.datetime.now()
         return now - self.start_time, self.end_time - now
-
-    @property
-    def refresh_interval(self) -> datetime.timedelta:
-        """Time interval between each query when polling the SE API"""
-        if self.duration >= datetime.timedelta(hours=2):
-            return datetime.timedelta(minutes=30)
-        elif self.duration >= datetime.timedelta(minutes=45):
-            return datetime.timedelta(minutes=15)
-        elif self.duration >= datetime.timedelta(minutes=15):
-            return datetime.timedelta(minutes=5)
-        elif self.duration >= datetime.timedelta(minutes=10):
-            return datetime.timedelta(minutes=2)
-        else:
-            return datetime.timedelta(minutes=1)
 
     @property
     def is_running(self) -> bool:
