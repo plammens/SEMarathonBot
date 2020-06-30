@@ -151,9 +151,7 @@ class Participant:
                 fromdate=int(last_time.timestamp())
             )
             increment = sum(
-                u.json_ob.reputation_change
-                for u in updates
-                if u.on_date > self._last_checked
+                u.json_ob.reputation_change for u in updates if u.on_date > last_time
             )
             if len(updates) > 0:
                 self._last_checked = updates[0].on_date
