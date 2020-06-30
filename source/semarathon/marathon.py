@@ -33,9 +33,11 @@ _stack_auth = stackauth.StackAuth()
 
 
 class Participant:
+    marathon: "Marathon"
     network_id: int
 
-    def __init__(self, name: str, network_id: int):
+    def __init__(self, marathon: "Marathon", name: str, network_id: int):
+        self.marathon = marathon
         self._name = name
         self.network_id = network_id
         self._users: Dict[str, Participant.UserProfile] = {}
@@ -57,10 +59,12 @@ class Participant:
         return ReadOnlyDictView(self._users)
 
     class UserProfile:
+        participant: "Participant"
         site_key: str
         score: int
 
-        def __init__(self, site_user: se.User):
+        def __init__(self, participant: "Participant", site_user: se.User):
+            self.participant = participant
             url = _domain_to_url(site_user.site.domain)
             self.site_key = SITES_BY_URL[url]["api_site_parameter"]
             self._site_user = site_user
@@ -68,9 +72,12 @@ class Participant:
             self._last_checked: Optional[datetime.datetime] = None
 
         @classmethod
-        def from_id(cls, site_key: str, user_id: int) -> "Participant.UserProfile":
+        def from_id(
+            cls, participant: "Participant", site_key: str, user_id: int
+        ) -> "Participant.UserProfile":
             """Create a UserProfile object given a user id for a SE site
 
+            :param participant: marathon Participant to which this user profile pertains
             :param site_key: site API key for the SE site this user pertains to
             :param user_id: user id for the given site
 
@@ -81,14 +88,15 @@ class Participant:
             assert len(results) <= 1
             if len(results) == 0:
                 raise UserNotFoundError(site_key, user_id)
-            return Participant.UserProfile(results[0])
+            return Participant.UserProfile(participant, results[0])
 
         @classmethod
         def from_username(
-            cls, site_key: str, username: str
+            cls, participant: "Participant", site_key: str, username: str
         ) -> "Participant.UserProfile":
             """Create a UserProfile object given a unique username for a SE site
 
+            :param participant: marathon Participant to which this user profile pertains
             :param site_key: site API key for the SE site this user pertains to
             :param username: unique username for the given site
 
@@ -103,7 +111,7 @@ class Participant:
                 raise UserNotFoundError(site_key, username)
             elif len(results) > 1:
                 raise MultipleUsersFoundError(site_key, username, results)
-            return Participant.UserProfile(results[0])
+            return Participant.UserProfile(participant, results[0])
 
         @property
         def user_id(self) -> int:
@@ -137,12 +145,12 @@ class Participant:
     @add_user_profile.register
     def add_user_profile(self, site_key: str, user_id: int) -> None:
         """Add user by ID; see :method:`Participant.UserProfile.from_id`"""
-        self.add_user_profile(self.UserProfile.from_id(site_key, user_id))
+        self.add_user_profile(self.UserProfile.from_id(self, site_key, user_id))
 
     @add_user_profile.register
     def add_user_profile(self, site_key: str, username: str) -> None:
         """Add user by username; see :method:`Participant.UserProfile.from_username`"""
-        self.add_user_profile(self.UserProfile.from_username(site_key, username))
+        self.add_user_profile(self.UserProfile.from_username(self, site_key, username))
 
     @add_user_profile.register
     def add_user_profile(self, site_key: str) -> None:
@@ -267,7 +275,7 @@ class Marathon:
 
     @add_participant.register
     def add_participant(self, name: str, network_id: int) -> None:
-        self.add_participant(Participant(name, network_id))
+        self.add_participant(Participant(self, name, network_id))
 
     def poll(self) -> Iterator[ScoreUpdate]:
         """Lazily yield updates for each participant whose reputation has changed"""

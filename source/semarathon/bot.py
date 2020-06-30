@@ -349,7 +349,7 @@ class SEMarathonBotSystem:
                 yield r"Please verify the IDs are correct\."
 
             for name, network_id in more_itertools.pairwise(context.args):
-                participant = mth.Participant(name, network_id)
+                participant = mth.Participant(self.marathon, name, network_id)
                 self.marathon.add_participant(participant)
                 text = "\n".join(lines(participant))
                 self.send_message(text=text, disable_web_page_preview=True)
