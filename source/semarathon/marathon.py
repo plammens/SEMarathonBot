@@ -3,7 +3,17 @@ import functools
 import json
 import logging
 import re
-from typing import Dict, Generator, Iterator, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import stackauth
 import stackexchange as se
@@ -158,11 +168,12 @@ class ScoreUpdate:
     def total(self) -> int:
         return sum(increment for increment in self.per_site.values())
 
-    def __getitem__(self, key: str) -> int:
-        return self.per_site[key]
-
-    def __setitem__(self, key: str, value: int):
-        self.per_site[key] = value
+    def fetch_updates(self, sites: Iterable[str]) -> "ScoreUpdate":
+        for site in sites:
+            increment = self.participant.user_profiles[site].update()
+            if increment:
+                self.per_site[site] = increment
+        return self
 
     def __bool__(self) -> bool:
         return bool(self.per_site)
@@ -261,12 +272,7 @@ class Marathon:
     def poll(self) -> Iterator[ScoreUpdate]:
         """Lazily yield updates for each participant whose reputation has changed"""
         for participant in self.participants.values():
-            update = ScoreUpdate(participant)
-            for site in self.sites:
-                increment = participant.user_profiles[site].update()
-                if increment:
-                    update[site] = increment
-            if update:
+            if update := ScoreUpdate(participant).fetch_updates(self.sites):
                 yield update
 
     def start(self, handler: Generator[None, ScoreUpdate, None]):
