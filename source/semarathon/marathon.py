@@ -136,11 +136,13 @@ class Participant:
 
             :return: the increment (or decrement) in score since the last call to
                      `update` or the start of the marathon
-            :raises RuntimeError: if called before the marathon starts
+            :raises MarathonRuntimeError: if called before the marathon starts
             """
             marathon = self.participant.marathon
             if not marathon.is_running:
-                raise RuntimeError("Called update() when marathon isn't running")
+                raise MarathonRuntimeError(
+                    "Called update() when marathon isn't running"
+                )
             last_time = self._last_checked or marathon.start_time
             updates: Sequence[se.RepChange] = self._site_user.reputation_detail.fetch(
                 fromdate=int(last_time.timestamp())
@@ -243,8 +245,12 @@ class Marathon:
 
     @property
     def elapsed_remaining(self) -> Tuple[datetime.timedelta, datetime.timedelta]:
+        """A tuple of (elapsed time, remaining time)
+
+        :raises MarathonRuntimeError: if the marathon isn't running
+        """
         if not self.is_running:
-            raise RuntimeError("Marathon isn't running yet")
+            raise MarathonRuntimeError("Marathon isn't running yet")
         assert self.start_time is not None
         assert self.end_time is not None
         now = datetime.datetime.now()
@@ -271,7 +277,7 @@ class Marathon:
         stopped = self._poll_thread.stopped
         alive = self._poll_thread.is_alive()
         if not stopped and not alive:
-            raise RuntimeError(
+            raise MarathonRuntimeError(
                 f"{self._poll_thread} died without stopping: {stopped=}, {alive=}"
             )
         return alive
@@ -346,6 +352,10 @@ class Marathon:
 
 
 class SEMarathonError(Exception):
+    pass
+
+
+class MarathonRuntimeError(SEMarathonError, RuntimeError):
     pass
 
 
