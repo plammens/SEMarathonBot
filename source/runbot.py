@@ -52,6 +52,7 @@ def setup_logging(level):
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     handler.addFilter(BotUpdaterFilter())
+    root.handlers.clear()
     root.addHandler(handler)
 
 
