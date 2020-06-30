@@ -748,7 +748,7 @@ def markdown_safe_send(
     if it can't be parsed correctly.
     """
     all_modes = [ParseMode.MARKDOWN_V2, ParseMode.MARKDOWN]
-    modes = all_modes[all_modes.index(parse_mode) :]
+    modes = all_modes[all_modes.index(parse_mode) :] if parse_mode else []
     for mode in modes:
         try:
             return bot.send_message(chat_id, message, parse_mode=mode)
