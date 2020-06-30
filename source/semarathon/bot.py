@@ -5,7 +5,7 @@ import inspect
 import itertools
 import logging
 import time
-from typing import Any, Callable, ClassVar, Dict, Generator, Optional, TypeVar
+from typing import Any, Callable, ClassVar, Dict, Generator, List, Optional, TypeVar
 
 import more_itertools
 import telegram as tg
@@ -87,11 +87,11 @@ def _make_command_handler(
                 f"{Text.load('usage-error')}\n{format_exception_md(e)}\n\n"
                 f"{escape_mdv2(getattr(e, 'help_txt', 'See /info for usage info'))}"
             )
-            markdown_safe_reply(update.message, text)
+            markdown_safe_send(context.bot, update.effective_chat.id, text)
             logger.info(f"served {command_info} (with usage/algorithm error)")
         except Exception as e:
             text = f"{Text.load('internal-error')}"
-            markdown_safe_reply(update.message, text)
+            markdown_safe_send(context.bot, update.effective_chat.id, text)
             logger.exception(f"{command_info}: unexpected exception", exc_info=e)
         finally:
             logger.debug(f"exiting {command_info}")
@@ -565,9 +565,7 @@ class SEMarathonBotSystem:
             """
             if hasattr(text, "parse_mode"):
                 parse_mode = text.parse_mode
-            return self.bot_system.bot.send_message(
-                chat_id=self.id, text=text, parse_mode=parse_mode, **kwargs
-            )
+            return markdown_safe_send(self.bot_system.bot, self.id, text, parse_mode)
 
         def _settings_text(self) -> str:
             def lines():
@@ -727,17 +725,22 @@ def _get_session(
         )
 
 
-def markdown_safe_reply(original_message: tg.Message, reply: str) -> tg.Message:
+def markdown_safe_send(
+    bot: tg.Bot,
+    chat_id: int,
+    message: str,
+    parse_mode: tg.ParseMode = ParseMode.MARKDOWN_V2,
+) -> tg.Message:
     """
     Tries to reply to ``original_message`` in Markdown; falls back to plain text
     if it can't be parsed correctly.
     """
-    chat_id = original_message.chat_id
-    modes = [ParseMode.MARKDOWN_V2, ParseMode.MARKDOWN]
+    all_modes = [ParseMode.MARKDOWN_V2, ParseMode.MARKDOWN]
+    modes = all_modes[all_modes.index(parse_mode) :]
     for mode in modes:
         try:
-            return original_message.bot.send_message(chat_id, reply, parse_mode=mode)
+            return bot.send_message(chat_id, message, parse_mode=mode)
         except tg.error.BadRequest as exc:
-            logger.exception(f"Failed to parse as {mode.name}", exc_info=exc)
+            logger.exception(f"Failed to parse as {mode}", exc_info=exc)
             continue
-    return original_message.reply_text(reply)
+    return bot.send_message(chat_id, message, parse_mode=None)
