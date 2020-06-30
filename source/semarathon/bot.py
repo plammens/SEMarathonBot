@@ -275,6 +275,7 @@ class SEMarathonBotSystem:
         id: int
         marathon: Optional[mth.Marathon]
         operation: Optional["SEMarathonBotSystem.Session.Operation"]
+        jobs: List[tge.Job]
 
         def __init__(self, bot_system: "SEMarathonBotSystem", chat_id: int):
             self.bot_system = bot_system
@@ -282,6 +283,7 @@ class SEMarathonBotSystem:
             self.id = chat_id
             self.marathon = None
             self.operation = None
+            self.jobs = []
 
         class Operation:
             session: "SEMarathonBotSystem.Session"
@@ -414,32 +416,40 @@ class SEMarathonBotSystem:
         def _start_marathon(self):
             self.marathon.start(handler=self._marathon_update_handler())
             self.send_message(r"*_Alright, marathon has begun\!_*")
-            self.bot_system.job_queue.run_repeating(
-                name="periodic updates",
-                callback=self.send_status_update,
-                interval=self.marathon.refresh_interval,
-                context=self.id,
+            self.jobs.append(
+                self.bot_system.job_queue.run_repeating(
+                    name="periodic updates",
+                    callback=self.send_status_update,
+                    interval=self.marathon.duration / 10,
+                    context=self.id,
+                )
             )
-            self.bot_system.job_queue.run_repeating(
-                name="minute countdown",
-                callback=self.countdown,
-                interval=datetime.timedelta(minutes=1),
-                first=self.marathon.end_time - datetime.timedelta(minutes=5),
-                context=self.id,
+            self.jobs.append(
+                self.bot_system.job_queue.run_repeating(
+                    name="minute countdown",
+                    callback=self.countdown,
+                    interval=datetime.timedelta(minutes=1),
+                    first=self.marathon.end_time - datetime.timedelta(minutes=5),
+                    context=self.id,
+                )
             )
-            self.bot_system.job_queue.run_repeating(
-                name="15 seconds countdown",
-                callback=self.countdown,
-                interval=datetime.timedelta(seconds=45),
-                first=self.marathon.end_time - datetime.timedelta(seconds=45),
-                context=self.id,
+            self.jobs.append(
+                self.bot_system.job_queue.run_repeating(
+                    name="15 seconds countdown",
+                    callback=self.countdown,
+                    interval=datetime.timedelta(seconds=45),
+                    first=self.marathon.end_time - datetime.timedelta(seconds=45),
+                    context=self.id,
+                )
             )
-            self.bot_system.job_queue.run_repeating(
-                name="5 seconds countdown",
-                callback=self.countdown,
-                interval=datetime.timedelta(seconds=1),
-                first=self.marathon.end_time - datetime.timedelta(seconds=5),
-                context=self.id,
+            self.jobs.append(
+                self.bot_system.job_queue.run_repeating(
+                    name="5 seconds countdown",
+                    callback=self.countdown,
+                    interval=datetime.timedelta(seconds=1),
+                    first=self.marathon.end_time - datetime.timedelta(seconds=5),
+                    context=self.id,
+                )
             )
 
         @cmdhandler()
@@ -632,6 +642,8 @@ class SEMarathonBotSystem:
                 self._marathon_end_handler()
 
         def _marathon_end_handler(self):
+            for job in self.jobs:
+                job.schedule_removal()
             self.send_message(r"_*Marathon has ended\!*_")
             scores = {p: p.score for p in self.marathon.participants.values()}
             winner, _ = max(scores.items(), key=lambda k, v: v, default=(None, None))
