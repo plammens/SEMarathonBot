@@ -46,6 +46,9 @@ class Participant:
     def __str__(self):
         return self.name
 
+    def __repr__(self):
+        return f"<Participant {self.name} ({self.network_id}) at {id(self)}>"
+
     @property
     def name(self) -> str:
         return self._name
@@ -313,7 +316,12 @@ class Marathon:
             logger.info("Marathon thread started")
             while not self._poll_thread.stop_event.wait(timeout=timeout):
                 for update in self.poll():
-                    handler.send(update)
+                    try:
+                        handler.send(update)
+                    except Exception as exc:
+                        logger.exception(
+                            "Marathon update handler raised an exception", exc_info=exc
+                        )
             logger.info("Ending marathon thread")
             handler.close()
 
