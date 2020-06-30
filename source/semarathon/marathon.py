@@ -405,13 +405,16 @@ class SiteNotFoundError(SiteError, LookupError):
 
 
 @functools.lru_cache
-def get_api(key: str) -> se.Site:
+def get_api(key: str, **kwargs) -> se.Site:
     """Get a Site object corresponding to the given site key
 
     :param key: a Stack Exchange API site key (e.g. "stackoverflow")
+    :param kwargs: Site kwargs
     """
     domain = _get_domain(key)
-    return se.Site(domain, app_key=SE_APP_KEY, cache=60, impose_throttling=True)
+    kwargs.setdefault("cache", 60)
+    kwargs.setdefault("impose_throttling", True)
+    return se.Site(domain, app_key=SE_APP_KEY, **kwargs)
 
 
 def _to_site_domain(site: Union[str, se.Site]):
