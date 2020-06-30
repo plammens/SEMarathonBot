@@ -158,7 +158,7 @@ class Participant:
             return increment
 
     @multimethod
-    def add_user_profile(self, user_profile: "Participant.UserProfile") -> None:
+    def add_user_profile(self, user_profile) -> None:
         self._users[user_profile.site_key] = user_profile
 
     @add_user_profile.register
