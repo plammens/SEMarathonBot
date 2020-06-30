@@ -349,7 +349,7 @@ class SEMarathonBotSystem:
                 yield r"Please verify the IDs are correct\."
 
             for name, network_id in more_itertools.pairwise(context.args):
-                participant = mth.Participant(self.marathon, name, network_id)
+                participant = mth.Participant(self.marathon, name, int(network_id))
                 self.marathon.add_participant(participant)
                 text = "\n".join(lines(participant))
                 self.send_message(text=text, disable_web_page_preview=True)
@@ -374,7 +374,7 @@ class SEMarathonBotSystem:
                     hours=hours, minutes=minutes
                 )
                 self.send_message(
-                    f"Set the duration to *{escape_mdv2(duration)}* (_hh:mm:ss_ )"
+                    f"Set the duration to *{escape_mdv2(str(duration))}* (_hh:mm:ss_ )"
                 )
             except ValueError:
                 raise ArgValueError("Invalid duration given")
@@ -406,7 +406,7 @@ class SEMarathonBotSystem:
                     context=self.id,
                 )
                 self.send_message(
-                    f"Scheduled marathon start for *{escape_mdv2(date_time)}*"
+                    f"Scheduled marathon start for *{escape_mdv2(str(date_time))}*"
                 )
             except ValueError:
                 raise ArgValueError("Invalid date/time given")
@@ -471,7 +471,7 @@ class SEMarathonBotSystem:
         ) -> datetime.timedelta:
             """Time remaining until the end of the marathon"""
             remaining = self.marathon.end_time - datetime.datetime.now()
-            self.send_message(f"*Time remaining:* {escape_mdv2(remaining)}")
+            self.send_message(f"*Time remaining:* {escape_mdv2(str(remaining))}")
             return remaining
 
         @cmdhandler()
@@ -599,7 +599,7 @@ class SEMarathonBotSystem:
                 yield "__LEADERBOARD__"
                 participants = self.marathon.participants.values()
                 for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
-                    yield rf"{i}\. *{escape_mdv2(p)}* – {p.score} points"
+                    yield rf"{i}\. *{escape_mdv2(str(p))}* – {p.score} points"
 
             return "\n".join(lines())
 
@@ -624,7 +624,7 @@ class SEMarathonBotSystem:
                         for site, increment in update.per_site.items()
                     )
                     text = (
-                        f"*{escape_mdv2(update.participant)}* just gained "
+                        f"*{escape_mdv2(str(update.participant))}* just gained "
                         f"*{update.total:+}* reputation on {per_site}"
                     )
                     self.send_message(text)
