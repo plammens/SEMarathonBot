@@ -147,13 +147,14 @@ class Participant:
             updates: Sequence[se.RepChange] = self._site_user.reputation_detail.fetch(
                 fromdate=int(last_time.timestamp())
             )
-            if len(updates) > 0:
-                self._last_checked = updates[0].on_date
             increment = sum(
                 u.json_ob.reputation_change
                 for u in updates
                 if u.on_date > self._last_checked
             )
+            if len(updates) > 0:
+                self._last_checked = updates[0].on_date
+            self.score += increment
             return increment
 
     @multimethod
