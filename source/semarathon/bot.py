@@ -598,7 +598,7 @@ class SEMarathonBotSystem:
             def lines():
                 yield "__LEADERBOARD__"
                 participants = self.marathon.participants.values()
-                for i, p in enumerate(sorted(participants, key=lambda x: x.score)):
+                for i, p in enumerate(sorted(participants, key=lambda x: x.score), 1):
                     yield rf"{i}\. *{escape_mdv2(str(p))}* – {p.score} points"
 
             return "\n".join(lines())
