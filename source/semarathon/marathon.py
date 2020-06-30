@@ -41,7 +41,6 @@ class Participant:
         self._name = name
         self.network_id = network_id
         self._users: Dict[str, Participant.UserProfile] = {}
-        self._score = 0
 
     def __str__(self):
         return self.name
@@ -55,7 +54,7 @@ class Participant:
 
     @property
     def score(self):
-        return self._score
+        return sum(u.score for u in self._users.values())
 
     @property
     def user_profiles(self) -> Mapping[str, "Participant.UserProfile"]:
