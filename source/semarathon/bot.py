@@ -646,7 +646,7 @@ class SEMarathonBotSystem:
                 job.schedule_removal()
             self.send_message(r"_*Marathon has ended\!*_")
             scores = {p: p.score for p in self.marathon.participants.values()}
-            winner, _ = max(scores.items(), key=lambda k, v: v, default=(None, None))
+            winner, _ = max(scores.items(), key=lambda t: t[1], default=(None, None))
             self._send_winner(winner)
             self.send_message(self._leaderboard_text())
 
