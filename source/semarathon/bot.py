@@ -374,7 +374,7 @@ class SEMarathonBotSystem:
                     hours=hours, minutes=minutes
                 )
                 self.send_message(
-                    f"Set the duration to *{escape_mdv2(str(duration))}* (_hh:mm:ss_ )"
+                    rf"Set the duration to *{escape_mdv2(str(duration))}* \(_hh:mm:ss_\)"
                 )
             except ValueError:
                 raise ArgValueError("Invalid duration given")
@@ -587,10 +587,10 @@ class SEMarathonBotSystem:
             return "\n".join(lines())
 
         def _participants_text(self) -> str:
-            # TODO: fix participants text
             def lines():
                 yield "*Participants*:"
-                yield ""
+                for name, participant in self.marathon.participants.items():
+                    yield rf" \- {name} \({participant.network_id}\)"
 
             return "\n".join(lines())
 
@@ -631,12 +631,12 @@ class SEMarathonBotSystem:
             except GeneratorExit:
                 # marathon has stopped (either at the scheduled time or prematurely)
                 logger.debug("Notifying chat of end of marathon")
-                self._marathon_end_summary()
+                self._marathon_end_handler()
 
-        def _marathon_end_summary(self):
+        def _marathon_end_handler(self):
             self.send_message(r"_*Marathon has ended\!*_")
-            scores = self.marathon.participants
-            winner, _ = max(scores.items(), key=lambda k, v: v, default=(None,) * 2)
+            scores = {p: p.score for p in self.marathon.participants.values()}
+            winner, _ = max(scores.items(), key=lambda k, v: v, default=(None, None))
             self._send_winner(winner)
             self.send_message(self._leaderboard_text())
 
