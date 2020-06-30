@@ -126,8 +126,24 @@ class Participant:
             return f"https://{self._site_user.site.domain}/users/{self.user_id}/"
 
         def update(self) -> int:
+            """Return any score changes since the last time that was checked
+
+            The associated marathon must be running in order to call this method.
+            If update had never been called up to now, returns changes since the start
+            of the marathon.
+            Any changes are recorded internally so that `self.score` is always accurate
+            for the score since the marathon start up to the last :method:`update` call.
+
+            :return: the increment (or decrement) in score since the last call to
+                     `update` or the start of the marathon
+            :raises RuntimeError: if called before the marathon starts
+            """
+            marathon = self.participant.marathon
+            if not marathon.is_running:
+                raise RuntimeError("Called update() when marathon isn't running")
+            last_time = self._last_checked or marathon.start_time
             updates: Sequence[se.RepChange] = self._site_user.reputation_detail.fetch(
-                fromdate=self._last_checked and int(self._last_checked.timestamp())
+                fromdate=int(last_time.timestamp())
             )
             if len(updates) > 0:
                 self._last_checked = updates[0].on_date
@@ -177,6 +193,7 @@ class ScoreUpdate:
         return sum(increment for increment in self.per_site.values())
 
     def fetch_updates(self, sites: Iterable[str]) -> "ScoreUpdate":
+        """Query the API for score changes for `self.participant` for a set of sites"""
         for site in sites:
             increment = self.participant.user_profiles[site].update()
             if increment:
