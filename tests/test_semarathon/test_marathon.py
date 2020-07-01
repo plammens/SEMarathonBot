@@ -8,6 +8,8 @@ import requests
 from freezegun import freeze_time
 
 from semarathon import marathon as mth
+from semarathon.utils import coroutine
+from .mocks import RepDetailsMock, mock_target_no_participants
 
 with open("data/SE-Sites.json") as db:
     SITES = json.load(db)
@@ -29,16 +31,15 @@ def marathon():
     marathon.stop()
 
 
-def mock_target():
-    update = yield
-    assert False, f"received update {update} with no participants"
-
-
 # TODO: mock Site API (fetch)
 
 # noinspection PyPep8Naming
 @pytest.mark.usefixtures("use_single_http_session")
 class TestMarathon:
+    @pytest.fixture(autouse=True)
+    def reraise_(self, reraise):
+        return reraise
+
     def test_init_noArgs_defaultSites(self):
         marathon = mth.Marathon()
         assert set(marathon.sites) == set(mth.DEFAULT_SITES_KEYS)
@@ -49,6 +50,7 @@ class TestMarathon:
     def test_init_sitesList_getRegistered(self, sites):
         marathon = mth.Marathon(*sites)
         assert set(marathon.sites) == set(sites)
+        # TODO: refactor as list
         for site in sites:
             assert marathon.sites[site].domain in SITES[site]["site_url"]
 
@@ -91,20 +93,63 @@ class TestMarathon:
             marathon.duration = duration
 
     def test_start_correctState(self, marathon):
+        marathon.duration = datetime.timedelta(seconds=1)
         now = datetime.datetime.now()
         with freeze_time(now):
-            marathon.start(mock_target())
+            marathon.start(mock_target_no_participants())
         assert marathon.is_running
         assert marathon.start_time == now
         assert marathon.end_time == marathon.start_time + marathon.duration
 
     def test_start_withZeroDuration_ends(self, marathon):
         marathon.duration = datetime.timedelta(0)
-        marathon.start(mock_target())
+        marathon.start(mock_target_no_participants())
         time.sleep(0.01)
         assert not marathon.is_running
 
+    def test_start_withPositiveDuration_lastsEnough(self, marathon):
+        delta = datetime.timedelta(seconds=0.1)
+        marathon.duration = delta
+        marathon.start(mock_target_no_participants())
+        time.sleep(0.095)
+        assert marathon.is_running
+        time.sleep(0.02)
+        assert not marathon.is_running
+
+    @pytest.mark.parametrize(
+        "refresh_interval",
+        argvalues=[datetime.timedelta(seconds=0.25), datetime.timedelta(seconds=0.5),],
+    )
+    def test_start_someRefreshInterval_receiveUpdatesOnTime(
+        self, marathon, refresh_interval, reraise
+    ):
+        expected_interval_seconds = refresh_interval.total_seconds()
+        received = False
+        last_time = datetime.datetime.now()
+
+        @coroutine
+        def update_handler():
+            nonlocal last_time, received
+
+            while True:
+                update = yield
+                now = datetime.datetime.now()
+                received = received or bool(update)
+                interval_seconds = (now - last_time).total_seconds()
+                assert interval_seconds == pytest.approx(expected_interval_seconds)
+                assert update.total == 3 * 10
+                last_time = now
+
+        with RepDetailsMock():
+            marathon.add_participant("Anakhand", 8120429)
+            marathon.refresh_interval = refresh_interval
+            marathon.start(update_handler())
+            time.sleep(expected_interval_seconds)
+            marathon.stop()
+
+        assert received
+
     def test_stop_endsMarathon(self, marathon):
-        marathon.start(mock_target())
+        marathon.start(mock_target_no_participants())
         marathon.stop()
         assert not marathon.is_running

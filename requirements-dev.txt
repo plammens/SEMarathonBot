@@ -2,3 +2,4 @@ mypy
 pre-commit
 pytest
 freezegun
+pytest-reraise
