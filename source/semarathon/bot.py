@@ -101,7 +101,7 @@ def _make_command_handler(
 
 
 def _extract_command_description(callback: Callable) -> str:
-    doc = callback.__doc__
+    doc = getattr(callback, "__doc__", None)
     if not doc:
         raise ValueError(f"No command description found for callback {callback}")
     return doc.strip().split("\n", maxsplit=1)[0]
@@ -144,9 +144,9 @@ def cmdhandler(
         )
         callback.command_handler = handler
         if register:
-            cmdhandler._counter = getattr(cmdhandler, "_counter", 0) + 1
-            # noinspection PyProtectedMember
-            callback.register = cmdhandler._counter
+            callback.register = cmdhandler._counter = (
+                getattr(cmdhandler, "_counter", 0) + 1
+            )
             callback.command_info = tg.BotCommand(
                 command_, _extract_command_description(callback)
             )
