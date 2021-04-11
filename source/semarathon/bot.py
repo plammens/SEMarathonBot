@@ -5,7 +5,7 @@ import inspect
 import itertools
 import logging
 import time
-from typing import Any, Callable, ClassVar, Dict, Generator, List, Optional, TypeVar
+from typing import Any, Callable, Dict, Generator, List, Optional, TypeVar
 
 import more_itertools
 import telegram as tg
@@ -227,9 +227,6 @@ class SEMarathonBotSystem:
     Telegram bot (i.e. bot username).
     """
 
-    # mapping of bot ID to bot system instances
-    _instances: ClassVar[Dict[int, "SEMarathonBotSystem"]] = {}
-
     bot: tg.Bot
     updater: tge.Updater
     dispatcher: tge.Dispatcher
@@ -251,7 +248,7 @@ class SEMarathonBotSystem:
         self.sessions = {}
 
         self._setup_handlers()
-        SEMarathonBotSystem._instances[self.bot.id] = self
+        self.dispatcher.bot_data["bot_system"] = self
 
     @staticmethod
     @cmdhandler(callback_type=_CommandCallbackType.FREE_FUNCTION)
@@ -720,7 +717,7 @@ class ArgCountError(UsageError):
 
 def _get_bot_system(context: tge.CallbackContext) -> SEMarathonBotSystem:
     try:
-        return SEMarathonBotSystem._instances[context.bot.id]
+        return context.bot_data["bot_system"]
     except KeyError:
         raise RuntimeError("Received an update destined for an uninitialised bot")
 
