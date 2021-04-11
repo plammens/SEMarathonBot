@@ -20,9 +20,9 @@ def shutdown_bot(bot_system):
     sessions = bot_system.sessions
     for chat_id, session in sessions.copy().items():
         session.send_message(
-            "*SERVER SHUTDOWN* – Going to sleep with the fishes...", parse_mode=None
+            "SERVER SHUTDOWN – Going to sleep with the fishes...", parse_mode=None
         )
-        del sessions[chat_id]
+        session._shutdown(message=False)
 
 
 def setup_logging(level):
@@ -47,7 +47,8 @@ def setup_logging(level):
     root.setLevel(level)
     # noinspection PyArgumentList
     formatter = logging.Formatter(
-        fmt="{asctime} - {levelname:8} - {origin:50} - {message}", style="{",
+        fmt="{asctime} - {levelname:8} - {origin:50} - {message}",
+        style="{",
     )
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)

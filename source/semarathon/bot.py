@@ -5,7 +5,7 @@ import inspect
 import itertools
 import logging
 import time
-from typing import Any, Callable, Dict, Generator, List, Optional, TypeVar
+from typing import Any, Callable, Generator, List, Optional, TypeVar
 
 import more_itertools
 import telegram as tg
@@ -74,7 +74,7 @@ def _make_command_handler(
             # Build arguments list:
             args = [update, context]
             if callback_type == _CommandCallbackType.SESSION_METHOD:
-                args.insert(0, _get_session(context, bot_system))
+                args.insert(0, _get_session(context))
             elif callback_type == _CommandCallbackType.BOT_SYSTEM_METHOD:
                 args.insert(0, bot_system)
 
@@ -114,7 +114,7 @@ def cmdhandler(
     register: bool = True,
     **handler_kwargs,
 ) -> Decorator:
-    """Parametrised decorator that marks a function as a callback for a command handler
+    """Parametrised decorator that marks a function as a callback for a command handler.
 
     :param command: name of bot command to add a handler for
     :param callback_type: type of callback ("standard" top-level function, bot system
@@ -129,8 +129,8 @@ def cmdhandler(
                            creation of the command handler (these will be passed
                            to ``telegram.ext.dispatcher.add_handler``)
 
-    :return: the decorated function, with the added ``command_handler`` and
-             (optionally) ``command_info`` attributes.
+    :return: (after decoration) the decorated function, with the added
+        ``command_handler`` and (optionally) ``command_info`` attributes.
     """
 
     def decorator(callback: T) -> T:
@@ -231,11 +231,10 @@ class SEMarathonBotSystem:
     updater: tge.Updater
     dispatcher: tge.Dispatcher
     job_queue: tge.JobQueue
-    # TODO: make sessions delegate to chat data
-    sessions: Dict[int, "SEMarathonBotSystem.Session"]
 
     def __init__(self, token: str, **kwargs):
-        """Updater for a SE Marathon Bot instance.
+        """
+        Initialize a new bot instance and bind it to a certain bot username.
 
         Arguments are the same as for :class:`telegram.ext.Updater` with the exception
         of use_context, which is automatically set to ``True`` (and cannot be changed).
@@ -245,23 +244,31 @@ class SEMarathonBotSystem:
         self.bot = self.updater.bot
         self.dispatcher = self.updater.dispatcher
         self.job_queue = self.updater.job_queue
-        self.sessions = {}
 
         self._setup_handlers()
         self.dispatcher.bot_data["bot_system"] = self
 
+    @property
+    def sessions(self):
+        return {
+            chat_id: chat_data["session"]
+            for chat_id, chat_data in self.dispatcher.chat_data.items()
+            if "session" in chat_data
+        }
+
+    # noinspection PyUnusedLocal
     @staticmethod
     @cmdhandler(callback_type=_CommandCallbackType.FREE_FUNCTION)
     def info(update: tg.Update, context: tge.CallbackContext):
         """General information about this bot and credits"""
         update.message.reply_markdown_v2(Text.load("info"))
 
+    # noinspection PyUnusedLocal
     @cmdhandler(callback_type=_CommandCallbackType.BOT_SYSTEM_METHOD)
     def start(self, update: tg.Update, context: tge.CallbackContext) -> "Session":
         """Start a session in the current chat (start listening for commands)"""
         chat_id = update.message.chat_id
         session = SEMarathonBotSystem.Session(self, chat_id)
-        context.chat_data["session"] = self.sessions[chat_id] = session
         update.message.reply_text(text=Text.load("start"))
         return session
 
@@ -276,12 +283,14 @@ class SEMarathonBotSystem:
         jobs: List[tge.Job]
 
         def __init__(self, bot_system: "SEMarathonBotSystem", chat_id: int):
+            """Initialize a new session and attach it to the given chat."""
             self.bot_system = bot_system
-            self.bot_system.sessions[chat_id] = self
             self.id = chat_id
             self.marathon = None
             self.operation = None
             self.jobs = []
+
+            self.bot_system.dispatcher.chat_data[chat_id]["session"] = self
 
         class Operation:
             session: "SEMarathonBotSystem.Session"
@@ -374,7 +383,8 @@ class SEMarathonBotSystem:
                     hours=hours, minutes=minutes
                 )
                 self.send_message(
-                    rf"Set the duration to *{escape_mdv2(str(duration))}* \(_hh:mm:ss_\)"
+                    rf"Set the duration to "
+                    rf"*{escape_mdv2(str(duration))}* \(_hh:mm:ss_\)"
                 )
             except ValueError:
                 raise ArgValueError("Invalid duration given")
@@ -495,14 +505,16 @@ class SEMarathonBotSystem:
             self.marathon.stop()
             assert not self.marathon.is_running
 
-        def _shutdown(self):
-            self.marathon.stop()
+        def _shutdown(self, message=True):
+            if self.marathon is not None:
+                self.marathon.stop()
             for job in self.bot_system.job_queue.jobs():
                 job.schedule_removal()
-            del self.bot_system.sessions[self.id]
-            self.send_message(
-                text="I'm now sleeping. Reactivate with /start.", parse_mode=None
-            )
+            del self.bot_system.dispatcher.chat_data[self.id]["session"]
+            if message:
+                self.send_message(
+                    text="I'm now sleeping. Reactivate with /start.", parse_mode=None
+                )
 
         @cmdhandler()
         @require_confirmation(target=_shutdown)
@@ -685,7 +697,7 @@ class SEMarathonBotSystem:
         self.bot.set_my_commands(cmd_list)
 
 
-# Hide decorators (as the're intended to be used only with the above class)
+# Hide decorators (as they're intended to be used only with the above class)
 del cmdhandler
 del marathon_method
 del running_marathon_method
@@ -722,13 +734,9 @@ def _get_bot_system(context: tge.CallbackContext) -> SEMarathonBotSystem:
         raise RuntimeError("Received an update destined for an uninitialised bot")
 
 
-def _get_session(
-    context: tge.CallbackContext, bot_system: SEMarathonBotSystem
-) -> SEMarathonBotSystem.Session:
+def _get_session(context: tge.CallbackContext) -> SEMarathonBotSystem.Session:
     try:
-        session = context.chat_data["session"]
-        assert session is bot_system.sessions[session.id]
-        return session
+        return context.chat_data["session"]
     except KeyError:
         raise UsageError(
             "Session not initialized",
