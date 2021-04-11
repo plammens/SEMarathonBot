@@ -137,7 +137,10 @@ def cmdhandler(
         command_ = command or callback.__name__
 
         handler = _make_command_handler(
-            callback, command_, callback_type=callback_type, **handler_kwargs,
+            callback,
+            command_,
+            callback_type=callback_type,
+            **handler_kwargs,
         )
         callback.command_handler = handler
         if register:
@@ -171,7 +174,6 @@ def running_marathon_method(method: Callable) -> Callable:
         session.check_marathon_running()
         method(session, *args, **kwargs)
 
-    decorated_method.__name__ = method.__name__
     return decorated_method
 
 
@@ -182,7 +184,6 @@ def ongoing_operation_method(method: Callable) -> Callable:
         method(session, *args, **kwargs)
         session.operation = None
 
-    decorated_method.__name__ = method.__name__
     return decorated_method
 
 
