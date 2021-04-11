@@ -19,6 +19,7 @@ def shutdown_bot(bot_system):
     bot_system.updater.stop()
     sessions = bot_system.sessions
     for chat_id, session in sessions.copy().items():
+        # noinspection SpellCheckingInspection
         session.send_message(
             "SERVER SHUTDOWN – Going to sleep with the fishes...", parse_mode=None
         )
@@ -41,11 +42,10 @@ def setup_logging(level):
                 return not self.PATT.match(record.threadName)
 
     logging.setLogRecordFactory(CustomLogRecord)
-    # noinspection SpellCheckingInspection,PyArgumentList
 
     root = logging.getLogger()
     root.setLevel(level)
-    # noinspection PyArgumentList
+    # noinspection SpellCheckingInspection,PyArgumentList
     formatter = logging.Formatter(
         fmt="{asctime} - {levelname:8} - {origin:50} - {message}",
         style="{",
@@ -58,6 +58,7 @@ def setup_logging(level):
 
 
 def construct_bot():
+    # noinspection SpellCheckingInspection
     logging.info("Initializing semarathon.bot module")
     from semarathon.bot import SEMarathonBotSystem
 

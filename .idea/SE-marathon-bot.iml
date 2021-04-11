@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.mypy_cache" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/source/.mypy_cache" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8 (SE-marathon-bot)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -343,7 +343,8 @@ class Marathon:
             for site in self._sites:
                 if site not in participant.user_profiles:
                     raise SEMarathonError(
-                        f"Missing a {SITES[site]['name']} user profile for {participant}"
+                        f"Missing a {SITES[site]['name']} user profile "
+                        f"for {participant}"
                     )
 
 
@@ -370,7 +371,10 @@ class UserNotFoundError(UserLookupError):
         super().__init__(site_key, username_or_id)
 
     def __str__(self):
-        return f"User {repr(self.username_or_id)} not found at {SITES[self.site_key]['name']}"
+        return (
+            f"User {repr(self.username_or_id)} not found at "
+            f"{SITES[self.site_key]['name']}"
+        )
 
 
 class MultipleUsersFoundError(UserLookupError):

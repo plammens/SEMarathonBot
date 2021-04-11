@@ -1,4 +1,4 @@
-import collections
+import collections.abc
 import datetime
 import functools
 import logging
@@ -10,6 +10,7 @@ import telegram.ext.filters
 
 
 def debug_print(msg: str):
+    # noinspection SpellCheckingInspection
     print("\t".join(("[SEMB]", msg)))
 
 
@@ -32,14 +33,15 @@ class Text(str):
 
         Searches the `text` sub-folder first and then the root working directory for
         files with a certain name and whose extension is either ``.txt`` or ``.md``.
-        This function is memoized, so loading the same text will be much faster after the
-        first time.
+        This function is memoized, so loading the same text will be much faster after
+        the first time.
 
         :param filename: name of the text file (without the extension)
 
-        :return: Text object with the contents of the text file (if found), with a parse mode
-                 automatically deduced from the file extension
-        :raises: FileNotFoundError if the file isn't found after trying all combinations
+        :return: Text object with the contents of the text file (if found), with a
+            parse mode automatically deduced from the file extension.
+        :raises: FileNotFoundError if the file isn't found after trying all
+            combinations.
         """
         extension_to_parse_mode = {
             "md": tg.ParseMode.MARKDOWN_V2,
